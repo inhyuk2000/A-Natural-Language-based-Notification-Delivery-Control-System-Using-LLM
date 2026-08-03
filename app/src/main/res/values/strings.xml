@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Agentnotif</string>
+    <string name="accessibility_service_description"></string>
+    <string name="shortcut_label_receive_alerts">알림 받아줘</string>
+    <string name="shortcut_label_receive_alerts_long">Agent Notif에서 알림 받아줘</string>
+    <string name="shortcut_label_disable_alerts">알림 꺼줘</string>
+    <string name="shortcut_label_disable_alerts_long">Agent Notif에서 알림 꺼줘</string>
+</resources>

@@ -1,0 +1,5 @@
+parameters: []
+queryPatterns:
+  - "내 앱 알림 받아줘"
+  - "Agent Notif에서 알림 받아줘"
+  - "알림 받아줘"

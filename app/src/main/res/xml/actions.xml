@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<action intentName="com.example.GET_MY_NOTIFICATION">
+    <fulfillment urlTemplate="agentnotif://get_notification" />
+    <queryPatterns>
+        <queryPattern>내 알림 보여줘</queryPattern>
+        <queryPattern>알림 확인해줘</queryPattern>
+        <queryPattern>새로운 알림 있어?</queryPattern>
+    </queryPatterns>
+</action>

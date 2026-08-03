@@ -1,0 +1,3 @@
+## Copy to local.properties and fill in values. Do not commit local.properties.
+sdk.dir=C\:\\Users\\YOUR_USER\\AppData\\Local\\Android\\Sdk
+OPENAI_API_KEY=YOUR_OPENAI_API_KEY_HERE

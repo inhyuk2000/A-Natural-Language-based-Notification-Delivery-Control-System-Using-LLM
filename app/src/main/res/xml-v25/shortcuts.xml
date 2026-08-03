@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="receive_alerts"
+        android:shortcutShortLabel="@string/shortcut_label_receive_alerts"
+        android:shortcutLongLabel="@string/shortcut_label_receive_alerts_long"
+        android:enabled="true">
+        <intent android:action="com.example.agentnotif.RECEIVE_LOW_IMPORTANCE_NOTIFICATIONS_STATIC"
+            android:targetPackage="com.example.agentnotif"
+            android:targetClass="com.example.agentnotif.MainActivity" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="disable_alerts"
+        android:shortcutShortLabel="@string/shortcut_label_disable_alerts"
+        android:shortcutLongLabel="@string/shortcut_label_disable_alerts_long"
+        android:enabled="true">
+        <intent android:action="com.example.agentnotif.DISABLE_ALERTS"
+            android:targetPackage="com.example.agentnotif"
+            android:targetClass="com.example.agentnotif.MainActivity"/>
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+</shortcuts>
