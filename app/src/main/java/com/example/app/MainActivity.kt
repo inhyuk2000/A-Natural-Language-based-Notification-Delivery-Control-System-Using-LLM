@@ -77,9 +77,6 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_LAST_TIMESTAMP = "lastTimestamp"
         private const val KEY_FEATURE_ENABLED = "featureEnabled"
 
-        // shortcuts.xml에 정의된 액션과 동일하게 상수화합니다.
-        const val ACTION_RECEIVE_LOW_IMPORTANCE_NOTIFICATIONS_STATIC = "com.example.agentnotif.RECEIVE_LOW_IMPORTANCE_NOTIFICATIONS_STATIC"
-        const val ACTION_DISABLE_ALERTS_STATIC = "com.example.agentnotif.DISABLE_ALERTS_STATIC"
         const val EXTRA_NAV_ROUTE = "extra_nav_route"
 
     }
@@ -184,9 +181,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (!AuthSession.isLoggedIn(this)) {
+        if (!UserRepository.hasUser(this)) {
             startActivity(
-                Intent(this, LoginActivity::class.java).apply {
+                Intent(this, OnboardingActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                 }
             )
@@ -198,7 +195,7 @@ class MainActivity : AppCompatActivity() {
             AgentnotifTheme(dynamicColor = false, darkTheme = false) {
                 val navController = androidx.navigation.compose.rememberNavController()
                 var userName by androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableStateOf(AuthSession.displayName(this@MainActivity))
+                    androidx.compose.runtime.mutableStateOf(UserRepository.getNickname(this@MainActivity))
                 }
                 var avatarPath by androidx.compose.runtime.remember {
                     androidx.compose.runtime.mutableStateOf(AuthSession.avatarPath(this@MainActivity))
@@ -236,14 +233,6 @@ class MainActivity : AppCompatActivity() {
                         userName = name
                         avatarPath = path
                     },
-                    onLoggedOut = {
-                        startActivity(
-                            Intent(this, LoginActivity::class.java).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                            }
-                        )
-                        finish()
-                    },
                 )
             }
         }
@@ -262,21 +251,6 @@ class MainActivity : AppCompatActivity() {
         // Log.d("DB_INIT", "앱 시작 시 DB 초기화 완료")
 
         startService(Intent(this, DummyService::class.java))
-
-        // 딥링크 데이터 처리
-        val data = intent?.data
-        if (data?.host == "get_notification") {
-            startReceivingNotification()  // 알림 시작하는 함수
-        }
-
-        when (intent?.action) {
-            ACTION_RECEIVE_LOW_IMPORTANCE_NOTIFICATIONS_STATIC -> {
-                // 동일한 처리
-                Log.d("받기성공!.", "onNewIntent received: ${intent?.action}")
-                val lowImportanceIntent = Intent("com.example.REQUEST_LOW_IMPORTANCE_NOTIFICATIONS")
-                LocalBroadcastManager.getInstance(this).sendBroadcast(lowImportanceIntent)
-            }
-        }
 
         val sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         deviceId = sharedPreferences.getString("deviceId", "UnknownDeviceId") ?: "UnknownDeviceId"
@@ -385,25 +359,6 @@ class MainActivity : AppCompatActivity() {
         intent.getStringExtra(EXTRA_NAV_ROUTE)?.let { route ->
             pendingRoute = route
         }
-
-        val data = intent.data
-        if (data?.host == "get_notification") {
-            startReceivingNotification()
-        }
-
-        Log.d("새로운", "onNewIntent called: ${intent.action}")
-        when (intent.action) {
-            ACTION_RECEIVE_LOW_IMPORTANCE_NOTIFICATIONS_STATIC -> {
-                Log.d("받기성공!.", "onNewIntent received: ${intent?.action}")
-                val lowImportanceIntent = Intent("com.example.REQUEST_LOW_IMPORTANCE_NOTIFICATIONS")
-                LocalBroadcastManager.getInstance(this).sendBroadcast(lowImportanceIntent)
-            }
-        }
-    }
-
-    private fun startReceivingNotification() {
-        // 여기서 알림 수신 시작하는 코드 작성 (예: 서비스 시작, 서버 통신 등)
-        Log.d("AgentNotif", "알림 수신 시작!")
     }
 
     private fun showRecyclerView(

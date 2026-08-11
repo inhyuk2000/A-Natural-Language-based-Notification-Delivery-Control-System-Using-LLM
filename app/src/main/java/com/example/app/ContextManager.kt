@@ -225,6 +225,13 @@ class ContextManager(private val context: Context) {
             }
             database.insert("NotifLog", null, values)
             notifyHomeRefresh()
+            // SQLite 로컬 저장 후, connect=true 일 때만 Firebase 요약 업로드 (본문 제외)
+            FirebaseRemoteLog.logNotifEvent(
+                context = context,
+                packageName = packageName,
+                status = status,
+                postTime = postTime,
+            )
         } catch (e: Exception) {
             Log.e("DB_CHECK", "NotifLog 기록 실패: ${e.message}")
         }
@@ -297,11 +304,9 @@ class ContextManager(private val context: Context) {
 
     /**
      * mute=true: 이 알림을 보류해야 하면 true.
-     * - exceptions 있음 → 기본 전부 묵음. **exceptions ∩ content** 만 통과
-     *   예) 게임 관련 카톡·인스타만 받아 → exceptions=[카톡,인스타], content=[게임]
-     *       → 게임 카톡/인스타만 수신, 나머지(게임 아닌 카톡 포함) 전부 보류
      * - name 있음 → 해당 앱(+content)만 보류
-     * - 둘 다 비움 → content 있으면 그 키워드만 보류, 없으면 전체 보류
+     * - name 비움 → content 있으면 그 키워드만 보류, 없으면 전체 보류
+     * - exceptions는 레거시 호환용(신규 규칙은 비움). 있으면 예외 앱(+content)만 통과
      */
     private fun shouldHoldByMute(
         packageName: String,
@@ -313,7 +318,6 @@ class ContextManager(private val context: Context) {
     ): Boolean {
         val contentOk = matchesContent(notifTitle, notifText, targetContents)
         if (targetExceptions.isNotEmpty()) {
-            // 통과 조건: 예외 앱이면서 키워드도 맞을 때만 수신 → 그 외는 전부 보류
             val passThrough = targetExceptions.contains(packageName) && contentOk
             return !passThrough
         }
@@ -321,13 +325,12 @@ class ContextManager(private val context: Context) {
             if (!targetNames.contains(packageName)) return false
             return contentOk
         }
-        // 전체 묵음 (키워드만 있으면 해당 알림만 묵음)
         return if (targetContents.isEmpty()) true else contentOk
     }
 
     /**
      * mute=false(allow): 즉시 수신해야 하면 true.
-     * name 비어 있으면(콘텐츠만 조건) 콘텐츠 매칭 시 허용.
+     * name/content에 맞으면 허용, 아니면 보류.
      */
     private fun shouldDeliverByAllow(
         packageName: String,
@@ -566,6 +569,77 @@ class ContextManager(private val context: Context) {
         mapNotNull { el ->
             if (el is JsonNull) null else el.jsonPrimitive.contentOrNull
         }.filter { it.isNotBlank() }
+
+    /**
+     * 활성 mute/allow 규칙상 더 이상 보류할 필요가 없는 held만 전달.
+     * - mute만 활성 → 매칭 대상은 유지, 비매칭은 전달
+     * - allow만 활성 → 허용 매칭만 전달
+     * - 둘 다 → shouldHoldForActiveRules와 동일 기준
+     */
+    private fun flushHeldNotBlockedByRules(active: List<RuleEval>): Int {
+        if (active.isEmpty()) {
+            return flushHeldNotifications(emptyList(), emptyList(), emptyList())
+        }
+        val listener = NotificationListener.instance
+        var delivered = 0
+
+        fun tryDeliver(pkg: String, title: String, text: String, postTime: String, notifId: Int?, pendingKey: String?) {
+            if (shouldHoldForActiveRules(pkg, title, text, active)) return
+            try {
+                val pending = pendingKey?.let { NotificationListener.pendingNotifications[it] }
+                if (pending != null) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        listener?.sendDelayedNotification(pending)
+                    }
+                    NotificationListener.pendingNotifications.remove(pendingKey)
+                } else {
+                    listener?.sendSimpleStoredNotification(pkg, title, text)
+                }
+                onHeldNotifDelivered(pkg, title, text, postTime)
+                if (notifId != null) {
+                    database.delete("Notifications", "id = ?", arrayOf(notifId.toString()))
+                } else if (pendingKey != null) {
+                    val sbn = pending
+                    if (sbn != null) {
+                        database.delete(
+                            "Notifications",
+                            "id = ?",
+                            arrayOf((pendingKey + "_" + sbn.postTime).hashCode().toString()),
+                        )
+                    }
+                }
+                delivered++
+            } catch (e: Exception) {
+                Log.e("CHK", "규칙 기준 플러시 실패 pkg=$pkg: ${e.message}", e)
+            }
+        }
+
+        val cursor = database.rawQuery("SELECT * FROM Notifications", null)
+        while (cursor.moveToNext()) {
+            val notifId = cursor.getInt(cursor.getColumnIndexOrThrow("id"))
+            val pkg = cursor.getString(cursor.getColumnIndexOrThrow("package_name")) ?: ""
+            val title = cursor.getString(cursor.getColumnIndexOrThrow("title")) ?: ""
+            val text = cursor.getString(cursor.getColumnIndexOrThrow("text")) ?: ""
+            val postTime = cursor.getString(cursor.getColumnIndexOrThrow("post_time")) ?: ""
+            val pendingKey = NotificationListener.pendingNotifications.entries.find { entry ->
+                (entry.key + "_" + entry.value.postTime).hashCode() == notifId
+            }?.key
+            tryDeliver(pkg, title, text, postTime, notifId, pendingKey)
+        }
+        cursor.close()
+
+        for (entry in NotificationListener.pendingNotifications.entries.toList()) {
+            val sbn = entry.value
+            val pkg = sbn.packageName
+            val title = sbn.notification.extras.getString(Notification.EXTRA_TITLE) ?: ""
+            val text = sbn.notification.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
+            tryDeliver(pkg, title, text, sbn.postTime.toString(), null, entry.key)
+        }
+
+        Log.d("CHK", "규칙 기준 홀드 플러시: delivered=$delivered")
+        if (delivered > 0) notifyHomeRefresh()
+        return delivered
+    }
 
     /**
      * 홀드된 알림을 즉시 사용자에게 재전송.
@@ -810,14 +884,13 @@ class ContextManager(private val context: Context) {
             }
             else -> true
         }
-        // GPT가 mute를 틀려도, 저장값은 모델 값을 우선(채팅 쪽 PromptEngine에서 힌트 보정)
         val modeStr = if (muteFlag) "mute" else "allow"
 
         val displayTitle = ruleTitle?.trim()?.takeIf { it.isNotEmpty() }
             ?: deriveRuleTitleFromTarget(
                 prompt = "",
                 appNames = nameArray.stringItems(),
-                exceptions = exceptionsArray.stringItems(),
+                exceptions = emptyList(),
                 mute = muteFlag,
                 recurrence = effectiveRecurrence,
                 daysOfWeek = daysOfWeekCsv,
@@ -827,7 +900,7 @@ class ContextManager(private val context: Context) {
 
         Log.d("RULE", "등록된 조건 package_name: ${nameStr ?: "null"}")
         Log.d("RULE", "등록된 조건 내용: ${contentStr ?: "null"}")
-        Log.d("RULE", "등록된 예외 package_name: ${exceptionsStr ?: "null"}")
+        Log.d("RULE", "등록된 예외(미사용): ${exceptionsStr ?: "null"}")
         Log.d(
             "RULE",
             "표시 제목: $displayTitle mute=$muteFlag recurrence=$effectiveRecurrence window=$windowStart~$windowEnd",
@@ -839,7 +912,8 @@ class ContextManager(private val context: Context) {
         fun buildValues(): ContentValues = ContentValues().apply {
             put("name", nameStr)
             put("content", contentStr)
-            put("exceptions", exceptionsStr)
+            // 신규 mute/allow 툴 경로: exceptions 미사용
+            putNull("exceptions")
             put("delivery", deliveryIso)
             put("activity", displayTitle)
             put("location", condition["location"].toString())
@@ -853,9 +927,9 @@ class ContextManager(private val context: Context) {
         }
 
         if (currentMilli >= deliveryMilli) {
-            // allow 규칙만: 매칭분 즉시 플러시. mute는 보류를 풀지 않음
+            // allow 규칙만: 허용 매칭분 즉시 플러시. mute는 보류 유지
             if (!muteFlag) {
-                flushHeldNotifications(namePackages, contentItems, exceptionPackages)
+                flushHeldNotifications(namePackages, contentItems, emptyList())
             }
 
             if (currentMilli < expiresMilli) {
@@ -880,6 +954,17 @@ class ContextManager(private val context: Context) {
             Log.d("DB_CHECK", "딜리버리 이전 → 규칙 저장 mode=$modeStr")
             notifyHomeRefresh()
         }
+
+        FirebaseRemoteLog.logRuleEvent(
+            context = context,
+            mode = modeStr,
+            apps = nameArray.stringItems(),
+            contents = contentItems,
+            deliveryIso = deliveryIso,
+            expiresIso = expiresIso,
+            recurrence = effectiveRecurrence,
+            title = displayTitle,
+        )
 
         return true
     }
@@ -1035,30 +1120,21 @@ class ContextManager(private val context: Context) {
         }
 
         if (activeConditions.isNotEmpty()) {
-            for (cond in activeConditions) {
-                val mute = isMuteMode(cond["mode"] ?: "mute")
-                val nameList = cond["name"]?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
-                val contentList = cond["content"]?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
-                val exceptionsList = cond["exceptions"]?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
-
-                if (mute) {
-                    // mute 활성: 보류 유지. exceptions(그래도 받을 앱)만 큐에 있으면 전달
-                    if (exceptionsList.isNotEmpty()) {
-                        flushHeldNotifications(
-                            namePackages = exceptionsList,
-                            contentItems = contentList,
-                            exceptionPackages = emptyList(),
-                        )
-                    }
-                } else {
-                    // allow 활성: 허용 매칭분만 전달
-                    flushHeldNotifications(
-                        namePackages = nameList,
-                        contentItems = contentList,
-                        exceptionPackages = exceptionsList,
-                    )
-                }
+            // 실시간 매칭과 동일: 활성 mute/allow 기준으로 더 이상 hold가 아닌 held만 flush
+            val activeEvals = activeConditions.map { cond ->
+                RuleEval(
+                    delivery = 0L,
+                    expires = Long.MAX_VALUE,
+                    mute = isMuteMode(cond["mode"] ?: "mute"),
+                    names = cond["name"]?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+                        ?: emptyList(),
+                    contents = cond["content"]?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+                        ?: emptyList(),
+                    exceptions = cond["exceptions"]?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+                        ?: emptyList(),
+                )
             }
+            flushHeldNotBlockedByRules(activeEvals)
         } else if (expiredIds.isEmpty()) {
             // 활성 규칙 없음 → 보류분 전부 지연 수신 (시작 전 규칙은 수신을 막지 않음)
             flushHeldNotifications(emptyList(), emptyList(), emptyList())
@@ -1081,13 +1157,10 @@ fun deriveRuleTitleFromTarget(
 ): String {
     val p = prompt
     val apps = appNames.filter { it.isNotBlank() && it != "모든" && it != "전부" }
-    val ex = exceptions.filter { it.isNotBlank() }
-    val exLabel = ex.joinToString(", ")
     val appsLabel = apps.joinToString(", ")
 
-    val base = when {
-        mute && apps.isEmpty() && ex.isEmpty() -> "모든 알림 일시 보류"
-        mute && apps.isEmpty() && ex.isNotEmpty() -> "${exLabel}만 수신 (나머지 보류)"
+        val base = when {
+        mute && apps.isEmpty() -> "모든 알림 일시 보류"
         mute && apps.size == 1 -> "${apps[0]}만 받지 않음"
         mute && apps.isNotEmpty() -> "${appsLabel}만 받지 않음"
         !mute && apps.size == 1 -> "${apps[0]}만 허용"

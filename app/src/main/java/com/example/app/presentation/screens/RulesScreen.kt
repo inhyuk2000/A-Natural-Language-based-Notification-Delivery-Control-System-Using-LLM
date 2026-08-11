@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.app.AppNameMapper
@@ -83,9 +84,9 @@ fun ContextManagerEntry.status(nowMillis: Long = System.currentTimeMillis()): Ru
 data class RuleEditDraft(
     val appsText: String,
     val keywordsText: String,
-    /** 저장 시점 기준 N분 뒤 → delivery */
+    /** 저장 시점 기준 총 N분 뒤(시간×60+분) → delivery */
     val startMinutesAfter: Int,
-    /** 저장 시점 기준 N분 뒤 → expires */
+    /** 저장 시점 기준 총 N분 뒤(시간×60+분) → expires */
     val endMinutesAfter: Int,
     val title: String,
 )
@@ -319,18 +320,28 @@ private fun RuleEditPanel(
     var keywordsText by remember(rule.id) {
         mutableStateOf(rule.content.replace(",", ", ").trim())
     }
+    var startHoursText by remember(rule.id) {
+        mutableStateOf(hoursMinutesFromNow(rule.delivery).first)
+    }
     var startMinutesText by remember(rule.id) {
-        mutableStateOf(minutesFromNowLabel(rule.delivery))
+        mutableStateOf(hoursMinutesFromNow(rule.delivery).second)
+    }
+    var endHoursText by remember(rule.id) {
+        mutableStateOf(hoursMinutesFromNow(rule.expires).first)
     }
     var endMinutesText by remember(rule.id) {
-        mutableStateOf(minutesFromNowLabel(rule.expires))
+        mutableStateOf(hoursMinutesFromNow(rule.expires).second)
     }
 
     LaunchedEffect(rule.id, rule.name, rule.content, rule.delivery, rule.expires) {
         appsText = packagesToDisplayCsv(rule.name)
         keywordsText = rule.content.replace(",", ", ").trim()
-        startMinutesText = minutesFromNowLabel(rule.delivery)
-        endMinutesText = minutesFromNowLabel(rule.expires)
+        val startHm = hoursMinutesFromNow(rule.delivery)
+        val endHm = hoursMinutesFromNow(rule.expires)
+        startHoursText = startHm.first
+        startMinutesText = startHm.second
+        endHoursText = endHm.first
+        endMinutesText = endHm.second
     }
 
     Column(
@@ -361,16 +372,20 @@ private fun RuleEditPanel(
         )
         Spacer(modifier = ComposeModifier.height(8.dp))
 
-        MinutesAfterRow(
+        HoursMinutesAfterRow(
             label = "시작 시간",
-            value = startMinutesText,
-            onValueChange = { startMinutesText = filterDigits(it) },
+            hours = startHoursText,
+            minutes = startMinutesText,
+            onHoursChange = { startHoursText = filterDigits(it, maxLen = 3) },
+            onMinutesChange = { startMinutesText = filterDigits(it, maxLen = 2) },
         )
         Spacer(modifier = ComposeModifier.height(6.dp))
-        MinutesAfterRow(
+        HoursMinutesAfterRow(
             label = "종료 시간",
-            value = endMinutesText,
-            onValueChange = { endMinutesText = filterDigits(it) },
+            hours = endHoursText,
+            minutes = endMinutesText,
+            onHoursChange = { endHoursText = filterDigits(it, maxLen = 3) },
+            onMinutesChange = { endMinutesText = filterDigits(it, maxLen = 2) },
         )
         Spacer(modifier = ComposeModifier.height(10.dp))
 
@@ -385,8 +400,11 @@ private fun RuleEditPanel(
                     .clip(RoundedCornerShape(8.dp))
                     .background(AppColors.Primary)
                     .clickable {
-                        val startMin = startMinutesText.toIntOrNull() ?: 0
-                        val endMin = max(endMinutesText.toIntOrNull() ?: 0, startMin)
+                        val startMin = totalMinutesAfter(startHoursText, startMinutesText)
+                        val endMin = max(
+                            totalMinutesAfter(endHoursText, endMinutesText),
+                            startMin,
+                        )
                         onSave(
                             RuleEditDraft(
                                 appsText = appsText,
@@ -417,10 +435,12 @@ private fun RuleEditPanel(
 }
 
 @Composable
-private fun MinutesAfterRow(
+private fun HoursMinutesAfterRow(
     label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
+    hours: String,
+    minutes: String,
+    onHoursChange: (String) -> Unit,
+    onMinutesChange: (String) -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
@@ -430,36 +450,54 @@ private fun MinutesAfterRow(
             fontWeight = FontWeight.SemiBold,
             modifier = ComposeModifier.width(64.dp),
         )
-        Box(
-            modifier = ComposeModifier
-                .width(60.dp)
-                .height(24.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFFF5F2FF)),
-            contentAlignment = Alignment.Center,
-        ) {
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                textStyle = TextStyle(
-                    color = AppColors.Black,
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Center,
-                ),
-                cursorBrush = SolidColor(AppColors.Primary),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = ComposeModifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-            )
-        }
+        DigitsBox(value = hours, onValueChange = onHoursChange, width = 40.dp)
+        Spacer(modifier = ComposeModifier.width(4.dp))
+        Text(
+            text = "시간",
+            color = Color(0xFF6E6B7D),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
         Spacer(modifier = ComposeModifier.width(6.dp))
+        DigitsBox(value = minutes, onValueChange = onMinutesChange, width = 40.dp)
+        Spacer(modifier = ComposeModifier.width(4.dp))
         Text(
             text = "분 뒤",
             color = Color(0xFF6E6B7D),
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun DigitsBox(
+    value: String,
+    onValueChange: (String) -> Unit,
+    width: Dp,
+) {
+    Box(
+        modifier = ComposeModifier
+            .width(width)
+            .height(24.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color(0xFFF5F2FF)),
+        contentAlignment = Alignment.Center,
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = true,
+            textStyle = TextStyle(
+                color = AppColors.Black,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+            ),
+            cursorBrush = SolidColor(AppColors.Primary),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = ComposeModifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
         )
     }
 }
@@ -533,20 +571,41 @@ private fun shortTime(iso: String): String {
     }
 }
 
-/** 기존 delivery/expires → 현재 시각 기준 'N분 뒤' 기본값 (이미 지났으면 00) */
-fun minutesFromNowLabel(iso: String, nowMillis: Long = System.currentTimeMillis()): String {
-    if (iso.isBlank()) return "00"
+/**
+ * 기존 delivery/expires → 현재 시각 기준 (시간, 분) 뒤.
+ * 이미 지났으면 ("00", "00").
+ */
+fun hoursMinutesFromNow(
+    iso: String,
+    nowMillis: Long = System.currentTimeMillis(),
+): Pair<String, String> {
+    if (iso.isBlank()) return "00" to "00"
     return try {
         val target = TimeUtils().parseIsoToMillis(iso)
-        val mins = ((target - nowMillis) / 60_000.0).roundToLong().coerceAtLeast(0L)
-        mins.toString().padStart(2, '0')
+        val totalMins = ((target - nowMillis) / 60_000.0).roundToLong().coerceAtLeast(0L)
+        val hours = (totalMins / 60).toString().padStart(2, '0')
+        val minutes = (totalMins % 60).toString().padStart(2, '0')
+        hours to minutes
     } catch (_: Exception) {
-        "00"
+        "00" to "00"
     }
 }
 
-private fun filterDigits(raw: String): String =
-    raw.filter { it.isDigit() }.take(5)
+/** 하위 호환: 총 분 문자열 (시*60+분, 최소 2자리) */
+fun minutesFromNowLabel(iso: String, nowMillis: Long = System.currentTimeMillis()): String {
+    val (h, m) = hoursMinutesFromNow(iso, nowMillis)
+    val total = (h.toIntOrNull() ?: 0) * 60 + (m.toIntOrNull() ?: 0)
+    return total.toString().padStart(2, '0')
+}
+
+private fun totalMinutesAfter(hoursText: String, minutesText: String): Int {
+    val hours = (hoursText.toIntOrNull() ?: 0).coerceAtLeast(0)
+    val minutes = (minutesText.toIntOrNull() ?: 0).coerceIn(0, 59)
+    return hours * 60 + minutes
+}
+
+private fun filterDigits(raw: String, maxLen: Int = 5): String =
+    raw.filter { it.isDigit() }.take(maxLen)
 
 fun formatRuleIso(millis: Long): String {
     val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault())

@@ -35,7 +35,6 @@ fun AppShell(
     onRefreshHome: () -> Unit,
     onRulesChanged: () -> Unit,
     onProfileUpdated: (name: String, avatarPath: String?) -> Unit,
-    onLoggedOut: () -> Unit,
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -54,7 +53,6 @@ fun AppShell(
             onRefreshHome = onRefreshHome,
             onRulesChanged = onRulesChanged,
             onProfileUpdated = onProfileUpdated,
-            onLoggedOut = onLoggedOut,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -92,7 +90,6 @@ fun AppNavHost(
     onRefreshHome: () -> Unit,
     onRulesChanged: () -> Unit,
     onProfileUpdated: (name: String, avatarPath: String?) -> Unit,
-    onLoggedOut: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -152,7 +149,6 @@ fun AppNavHost(
         }
         composable(AppRoutes.PROFILE) {
             ProfileRoute(
-                onLoggedOut = onLoggedOut,
                 onBack = { navController.navigateTab(AppRoutes.HOME) },
                 onProfileUpdated = onProfileUpdated,
             )

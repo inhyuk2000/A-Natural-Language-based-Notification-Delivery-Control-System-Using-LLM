@@ -70,7 +70,6 @@ fun ProfileScreen(
     avatarPath: String?,
     onBack: () -> Unit,
     onSave: (name: String, pendingAvatarUri: Uri?) -> Unit,
-    onLogout: () -> Unit,
 ) {
     var nameDraft by remember(displayName) { mutableStateOf(displayName) }
     var pendingAvatarUri by remember { mutableStateOf<Uri?>(null) }
@@ -210,7 +209,7 @@ fun ProfileScreen(
 
                 Spacer(modifier = ComposeModifier.height(24.dp))
                 ProfileFieldCard(
-                    label = "이름",
+                    label = "별명",
                     editable = true,
                     onEditClick = { nameFocus.requestFocus() },
                 ) {
@@ -229,7 +228,7 @@ fun ProfileScreen(
                             .focusRequester(nameFocus),
                         decorationBox = { inner ->
                             if (nameDraft.isEmpty()) {
-                                Text("이름을 입력하세요", color = AppColors.Secondary, fontSize = 14.sp)
+                                Text("별명을 입력하세요", color = AppColors.Secondary, fontSize = 14.sp)
                             }
                             inner()
                         },
@@ -238,7 +237,7 @@ fun ProfileScreen(
 
                 Spacer(modifier = ComposeModifier.height(16.dp))
                 ProfileFieldCard(
-                    label = "이메일",
+                    label = "디바이스 ID",
                     editable = false,
                     muted = true,
                 ) {
@@ -290,14 +289,6 @@ fun ProfileScreen(
                     )
                 }
                 Spacer(modifier = ComposeModifier.height(16.dp))
-                Text(
-                    text = "로그아웃",
-                    color = Color(0xFF9CA3AF),
-                    fontSize = 14.sp,
-                    modifier = ComposeModifier
-                        .clickable(onClick = onLogout)
-                        .padding(8.dp),
-                )
             }
         }
     }

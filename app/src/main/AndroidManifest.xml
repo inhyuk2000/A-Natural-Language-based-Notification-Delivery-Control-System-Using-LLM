@@ -47,10 +47,6 @@
                 android:name=".DummyService"
                 android:exported="true" />
 
-        <meta-data
-                android:name="com.google.android.actions"
-                android:resource="@xml/actions" />
-
         <activity
                 android:name=".OnboardingActivity"
                 android:exported="true">
@@ -68,28 +64,7 @@
                 android:name=".MainActivity"
                 android:exported="true"
                 android:launchMode="singleTop"
-                android:windowSoftInputMode="adjustResize">
-            <meta-data
-                    android:name="android.app.actions"
-                    android:resource="@xml/actions" />
-            <meta-data
-                    android:name="android.app.shortcuts"
-                    android:resource="@xml/shortcuts" />
-
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                        android:scheme="agentnotif"
-                        android:host="get_notification" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="com.example.app.RECEIVE_LOW_IMPORTANCE_NOTIFICATIONS_STATIC" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
+                android:windowSoftInputMode="adjustResize" />
         <activity android:name=".KeywordActivity" />
         <activity android:name=".DbViewActivity" />
 

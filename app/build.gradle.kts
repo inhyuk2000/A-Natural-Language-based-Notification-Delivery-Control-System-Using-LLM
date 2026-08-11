@@ -5,13 +5,21 @@ plugins {
     kotlin("plugin.serialization") version "2.0.21"
 }
 
-val localProperties = java.util.Properties().apply {
-    val localFile = rootProject.file("local.properties")
-    if (localFile.exists()) {
-        localFile.inputStream().use { load(it) }
-    }
+// Firebase Console에서 받은 google-services.json 이 있을 때만 플러그인 적용
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 }
-val openAiApiKey: String = localProperties.getProperty("OPENAI_API_KEY") ?: ""
+
+val openAiApiKey: String = rootProject.file("local.properties")
+    .takeIf { it.exists() }
+    ?.readLines()
+    ?.firstNotNullOfOrNull { line ->
+        val trimmed = line.trim()
+        if (trimmed.startsWith("OPENAI_API_KEY=")) trimmed.substringAfter("=").trim()
+        else null
+    }
+    .orEmpty()
 
 configurations.all {
     resolutionStrategy {
@@ -46,6 +54,7 @@ android {
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
         jvmTarget = "17"
@@ -59,7 +68,6 @@ android {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("androidx.core:core-ktx:1.10.1")
-    implementation("androidx.core:core-google-shortcuts:1.0.1")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.9.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
@@ -67,7 +75,8 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
-    implementation("com.google.firebase:firebase-database:20.3.0")
+    implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.firebase:firebase-analytics")
 
     implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation("androidx.multidex:multidex:2.0.1")

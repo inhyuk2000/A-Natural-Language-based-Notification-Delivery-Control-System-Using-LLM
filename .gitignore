@@ -13,7 +13,8 @@ local.properties
 .cxx
 app/build/
 **/build/
-**/google-services.json
+# Firebase: 실제 키는 로컬에만. 예시는 google-services.json.example 참고
+app/google-services.json
 *.jks
 *.keystore
 .env

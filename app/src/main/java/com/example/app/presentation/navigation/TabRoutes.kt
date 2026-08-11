@@ -14,6 +14,7 @@ import com.example.app.AuthSession
 import com.example.app.ContextManager
 import com.example.app.ContextManagerEntry
 import com.example.app.HomeDashboardData
+import com.example.app.UserRepository
 import com.example.app.hideNotifLogsFromUi
 import com.example.app.loadContextManagerData
 import com.example.app.presentation.screens.AddRuleScreen
@@ -224,32 +225,28 @@ fun AddRuleRoute(
 
 @Composable
 fun ProfileRoute(
-    onLoggedOut: () -> Unit,
     onBack: () -> Unit,
     onProfileUpdated: (name: String, avatarPath: String?) -> Unit,
 ) {
     val context = LocalContext.current
-    var displayName by remember { mutableStateOf(AuthSession.displayName(context)) }
+    var displayName by remember { mutableStateOf(UserRepository.getNickname(context)) }
     var avatarPath by remember { mutableStateOf(AuthSession.avatarPath(context)) }
+    val deviceId = remember { UserRepository.ensureDeviceId(context) }
 
     ProfileScreen(
         displayName = displayName,
-        email = AuthSession.email(context),
+        email = deviceId.take(12) + "…",
         avatarPath = avatarPath,
         onBack = onBack,
         onSave = { name, pendingUri ->
-            AuthSession.updateDisplayName(context, name)
+            UserRepository.updateNickname(context, name)
             if (pendingUri != null) {
                 runCatching {
                     avatarPath = AuthSession.updateAvatarFromUri(context, pendingUri)
                 }
             }
-            displayName = AuthSession.displayName(context)
+            displayName = UserRepository.getNickname(context)
             onProfileUpdated(displayName, avatarPath)
-        },
-        onLogout = {
-            AuthSession.logout(context)
-            onLoggedOut()
         },
     )
 }

@@ -9,9 +9,9 @@ import com.example.app.presentation.navigation.AppRoutes
 class ProfileActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!AuthSession.isLoggedIn(this)) {
+        if (!UserRepository.hasUser(this)) {
             startActivity(
-                Intent(this, LoginActivity::class.java).apply {
+                Intent(this, OnboardingActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                 }
             )

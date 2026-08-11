@@ -392,7 +392,7 @@ private fun WeeklySummaryCard(
     val animatedDelivered by animateIntAsState(stats.delivered, tween(550, easing = FastOutSlowInEasing), label = "weekDelivered")
     val animatedRate by animateFloatAsState(stats.filterRate.coerceIn(0f, 1f), tween(550, easing = FastOutSlowInEasing), label = "weekRate")
 
-    StatsCardShell(accent = AppColors.Primary, onRefresh = onRefresh, modifier = modifier) {
+    StatsCardShell(accent = AppColors.Orange, onRefresh = onRefresh, modifier = modifier) {
         Column(modifier = ComposeModifier.fillMaxWidth()) {
             Text("이번 주 요약", color = AppColors.Black, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = ComposeModifier.height(6.dp))
@@ -514,7 +514,7 @@ private fun RealtimeStatsCard(
         item.copy(progress = p)
     }
 
-    StatsCardShell(accent = AppColors.Primary, onRefresh = onRefresh, modifier = modifier) {
+    StatsCardShell(accent = AppColors.Black, onRefresh = onRefresh, modifier = modifier) {
         Column(modifier = ComposeModifier.fillMaxWidth()) {
             Text("실시간 통계", color = AppColors.Black, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = ComposeModifier.height(2.dp))

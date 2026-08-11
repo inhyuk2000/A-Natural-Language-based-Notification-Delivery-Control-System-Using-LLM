@@ -13,7 +13,7 @@ class DBHelper(
 
     companion object {
         const val DB_NAME = "llm_db.db"
-        const val DB_VERSION = 5
+        const val DB_VERSION = 6
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -62,6 +62,21 @@ class DBHelper(
                 status TEXT,
                 created_at INTEGER,
                 hidden INTEGER DEFAULT 0
+            );
+            """.trimIndent()
+        )
+
+        createUserDataTable(db)
+    }
+
+    private fun createUserDataTable(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS UserData (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT NOT NULL UNIQUE,
+                nickname TEXT NOT NULL,
+                created_at INTEGER NOT NULL
             );
             """.trimIndent()
         )
@@ -120,6 +135,9 @@ class DBHelper(
                 db.execSQL("ALTER TABLE ContextManager ADD COLUMN window_end TEXT DEFAULT ''")
             } catch (_: Exception) {
             }
+        }
+        if (oldVersion < 6) {
+            createUserDataTable(db)
         }
     }
 }
