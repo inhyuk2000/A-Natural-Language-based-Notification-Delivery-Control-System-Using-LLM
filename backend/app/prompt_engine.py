@@ -9,6 +9,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
+from langsmith import traceable
 
 TOOL_CONDITION = "extract_notification_condition"
 TOOL_MUTE = "extract_mute_target"
@@ -278,6 +279,7 @@ def _parse_tool_calls(ai: AIMessage) -> tuple[dict | None, dict | None, dict | N
     return condition, mute_target, allow_target
 
 # 메인 처리 로직 : (사용자 프롬프트, 현재 시간) 입력 -> (targetFixed, condition 포함한 Response Json) 반환
+@traceable(name="handle")
 def handle(prompt: str, current_time: str) -> dict[str, Any]:
     """
     PromptEngine.handle 대응.
@@ -294,6 +296,7 @@ def handle(prompt: str, current_time: str) -> dict[str, Any]:
         HumanMessage(content=prompt),
     ]
 
+    # LangSmith 자동 Tracing
     ai: AIMessage = llm.invoke(messages) # Tool Calling으로 구조화된 조건 추출 수행
     condition, mute_target, allow_target = _parse_tool_calls(ai)
 
@@ -319,6 +322,8 @@ def handle(prompt: str, current_time: str) -> dict[str, Any]:
                 content="추출된 tool 결과를 바탕으로 사용자에게 규칙이 어떻게 적용되는지 한두 문장으로 확인해줘."
             )
         )
+
+        # LangSmith 자동 Tracing
         confirm: AIMessage = llm.invoke(messages)
         assistant_content = (confirm.content or "").strip()
     else:
