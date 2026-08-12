@@ -11,15 +11,21 @@ if (file("google-services.json").exists()) {
     apply(plugin = "com.google.firebase.crashlytics")
 }
 
-val openAiApiKey: String = rootProject.file("local.properties")
-    .takeIf { it.exists() }
-    ?.readLines()
-    ?.firstNotNullOfOrNull { line ->
-        val trimmed = line.trim()
-        if (trimmed.startsWith("OPENAI_API_KEY=")) trimmed.substringAfter("=").trim()
-        else null
-    }
-    .orEmpty()
+fun localProp(key: String): String =
+    rootProject.file("local.properties")
+        .takeIf { it.exists() }
+        ?.readLines()
+        ?.firstNotNullOfOrNull { line ->
+            val trimmed = line.trim()
+            if (trimmed.startsWith("$key=")) trimmed.substringAfter("=").trim()
+            else null
+        }
+        .orEmpty()
+
+val openAiApiKey: String = localProp("OPENAI_API_KEY")
+// Emulator → host: 10.0.2.2 | Device → PC LAN IP
+val extractRuleApiBaseUrl: String =
+    localProp("EXTRACT_RULE_API_BASE_URL").ifBlank { "http://10.0.2.2:8000" }
 
 configurations.all {
     resolutionStrategy {
@@ -40,6 +46,7 @@ android {
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "OPENAI_API_KEY", "\"$openAiApiKey\"")
+        buildConfigField("String", "EXTRACT_RULE_API_BASE_URL", "\"$extractRuleApiBaseUrl\"")
     }
 
     buildTypes {

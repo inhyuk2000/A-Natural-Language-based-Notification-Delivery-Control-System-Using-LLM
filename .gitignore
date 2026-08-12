@@ -19,6 +19,9 @@ app/google-services.json
 *.keystore
 .env
 .env.*
+!.env.example
+backend/.venv/
+backend/**/__pycache__/
 *.apk
 *.aab
 *.log

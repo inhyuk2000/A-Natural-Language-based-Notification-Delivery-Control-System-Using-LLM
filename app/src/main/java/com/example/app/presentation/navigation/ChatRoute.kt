@@ -23,10 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.aallam.openai.api.chat.ChatMessage
 import com.aallam.openai.api.chat.ChatRole
-import com.aallam.openai.client.OpenAI
-import com.aallam.openai.client.OpenAIConfig
 import com.example.app.AppNameMapper
-import com.example.app.BuildConfig
 import com.example.app.ContextManager
 import com.example.app.PromptEngine
 import com.example.app.PromptViewModel
@@ -63,15 +60,8 @@ fun ChatRoute(onBack: () -> Unit) {
     val viewModel: PromptViewModel = viewModel(viewModelStoreOwner = activity)
     val scope = rememberCoroutineScope()
     val contextManager = remember { ContextManager(context) }
-    val openAI = remember {
-        OpenAI(
-            OpenAIConfig(
-                token = BuildConfig.OPENAI_API_KEY
-            )
-        )
-    }
-    val promptEngine = remember(openAI, contextManager, viewModel) {
-        PromptEngine(openAI, contextManager, viewModel.chatMessages)
+    val promptEngine = remember(contextManager, viewModel) {
+        PromptEngine(contextManager, viewModel.chatMessages)
     }
 
     var uiMessages by remember {

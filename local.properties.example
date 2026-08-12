@@ -1,3 +1,5 @@
 ## Copy to local.properties and fill in values. Do not commit local.properties.
 sdk.dir=C\:\\Users\\YOUR_USER\\AppData\\Local\\Android\\Sdk
 OPENAI_API_KEY=YOUR_OPENAI_API_KEY_HERE
+# LangChain FastAPI (emulator→host). Physical device: http://<PC_LAN_IP>:8000
+EXTRACT_RULE_API_BASE_URL=http://10.0.2.2:8000
