@@ -107,9 +107,10 @@ class PromptEngine(
             else -> true
         }
         val names = targetFixed.stringList("name")
+        val packages = targetFixed.stringList("packages")
         val contents = targetFixed.stringList("content")
 
-        if (!mute && names.isEmpty() && contents.isEmpty()) {
+        if (!mute && names.isEmpty() && packages.isEmpty() && contents.isEmpty()) {
             appendAssistant(
                 assistantMessage.ifBlank {
                     "받을 앱이나 키워드가 없어요. ‘카톡만 받아줘’처럼 대상을 알려주세요."
@@ -154,10 +155,11 @@ class PromptEngine(
             windowEnd = windowEnd,
         )
 
-        // 서버 JSON → 앱이 쓰던 형태로 정규화 (exceptions 보장)
+        // 서버 JSON → DB용 (packages = cosine 매핑 결과, name = 표시용)
         val targetForDb = buildJsonObject {
             put("mute", JsonPrimitive(mute))
             putJsonArray("name") { names.forEach { add(JsonPrimitive(it)) } }
+            putJsonArray("packages") { packages.forEach { add(JsonPrimitive(it)) } }
             putJsonArray("content") { contents.forEach { add(JsonPrimitive(it)) } }
             putJsonArray("exceptions") { }
         }
@@ -206,7 +208,11 @@ class PromptEngine(
         val payload = buildJsonObject {
             put("prompt", prompt)
             put("currentTime", currentTime)
+            put("installedApps", AppNameMapper.getInstalledAppsJsonArray())
         }.toString()
+        payload.chunked(3000).forEachIndexed { i, part ->
+            Log.d(TAG, "payload[$i]=$part")
+        }
         try {
             OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(payload) }
             val code = conn.responseCode

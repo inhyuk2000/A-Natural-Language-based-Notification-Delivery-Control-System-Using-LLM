@@ -62,6 +62,7 @@ def extract_rule_correctness(
 
     # 성공 정답 → targetFixed / condition 필드 비교
     # 정답에 있는 키만 검사 (부분 reference 허용)
+    # mappingScores 는 디버그 전용 — reference에 없으면 여기서 비교하지 않음
     pt = pred.get("targetFixed") or {}
     et = exp.get("targetFixed") or {}
     pc = pred.get("condition") or {}
@@ -69,8 +70,10 @@ def extract_rule_correctness(
 
     if "mute" in et:
         checks["mute"] = bool(pt.get("mute")) == bool(et.get("mute"))
-    if "name" in et:
-        checks["name"] = _as_set(pt.get("name")) == _as_set(et.get("name"))
+    # name 은 표시용 중간값(지메일/Gmail 등)이라 채점하지 않음.
+    # 매핑 성공 여부는 packages(packageName)로만 본다.
+    if "packages" in et:
+        checks["packages"] = _as_set(pt.get("packages")) == _as_set(et.get("packages"))
     if "content" in et:
         checks["content"] = _as_set(pt.get("content")) == _as_set(et.get("content"))
     if "recurrence" in ec:

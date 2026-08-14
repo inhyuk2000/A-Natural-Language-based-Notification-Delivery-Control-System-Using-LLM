@@ -34,7 +34,12 @@ def extract_rule(body: ExtractRuleRequest):
     if not os.getenv("OPENAI_API_KEY"):
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not set on the server")
     try:
-        result = handle(body.prompt.strip(), body.currentTime.strip())
+        installed = [app.model_dump() for app in body.installedApps]
+        result = handle(
+            body.prompt.strip(),
+            body.currentTime.strip(),
+            installed_apps=installed,
+        )
         return ExtractRuleResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

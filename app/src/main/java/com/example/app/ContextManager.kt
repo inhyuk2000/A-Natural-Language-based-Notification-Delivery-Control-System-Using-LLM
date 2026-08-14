@@ -773,28 +773,44 @@ class ContextManager(private val context: Context) {
         initDB()
 
         val nameArray = target.arrayOrEmpty("name")
+        val packagesArray = target.arrayOrEmpty("packages")
         val contentArray = target.arrayOrEmpty("content")
         val exceptionsArray = target.arrayOrEmpty("exceptions")
 
         val namePackages = mutableListOf<String>()
         val exceptionPackages = mutableListOf<String>()
 
-        for (appName in nameArray.stringItems()) {
-            val pkg = AppNameMapper.toPackageName(appName)
-            if (pkg.isNullOrBlank()) {
-                Log.e("AppNameMapper", "❌ 앱 이름 매핑 실패: $appName")
-                sendUserFeedback("‘$appName’ 앱을 찾을 수 없습니다. 다시 입력해주세요.")
-                return false // 🚫 DB 등록 중단
+        // 서버 cosine 결과(packages) 우선. 없으면 name exact-match fallback.
+        val hasPackagesField = target.containsKey("packages")
+        if (hasPackagesField) {
+            for (pkg in packagesArray.stringItems()) {
+                val trimmed = pkg.trim()
+                if (trimmed.isEmpty()) continue
+                namePackages.add(trimmed)
             }
-            namePackages.add(pkg)
+            if (nameArray.stringItems().isNotEmpty() && namePackages.isEmpty()) {
+                Log.e("AppNameMapper", "❌ packages 비어 있음 (서버 매핑 실패)")
+                sendUserFeedback("앱을 기기에서 찾지 못했습니다. 다시 입력해주세요.")
+                return false
+            }
+        } else {
+            for (appName in nameArray.stringItems()) {
+                val pkg = AppNameMapper.toPackageName(appName)
+                if (pkg.isNullOrBlank()) {
+                    Log.e("AppNameMapper", "❌ 앱 이름 매핑 실패: $appName")
+                    sendUserFeedback("‘$appName’ 앱을 찾을 수 없습니다. 다시 입력해주세요.")
+                    return false
+                }
+                namePackages.add(pkg)
+            }
         }
 
         for (appName in exceptionsArray.stringItems()) {
-            val pkg = AppNameMapper.toPackageName(appName)
+            val pkg = if (appName.contains(".")) appName.trim() else AppNameMapper.toPackageName(appName)
             if (pkg.isNullOrBlank()) {
                 Log.e("AppNameMapper", "❌ 예외 앱 이름 매핑 실패: $appName")
                 sendUserFeedback("‘$appName’ 앱을 찾을 수 없습니다. 다시 입력해주세요.")
-                return false // 🚫 DB 등록 중단
+                return false
             }
             exceptionPackages.add(pkg)
         }

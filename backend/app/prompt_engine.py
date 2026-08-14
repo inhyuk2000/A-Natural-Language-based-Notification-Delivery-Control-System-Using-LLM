@@ -34,6 +34,8 @@ mute/allow target은 한 명령에 하나만. exceptions 필드는 없다.
 ## 시간 규칙 (현재={now}) — 문장에 시간이 있을 때만 적용
 - 구간은 항상 delivery < expires. delivery==expires 절대 금지.
 - "지금부터 N분(간) …" → delivery=현재, expires=현재+N분
+- **"N분(만/동안/간) …" 처럼 기간만 있고 시작 시각이 없으면 → 지금부터. delivery=현재, expires=현재+N분**
+  - 예: "카톡 2분만 받지마", "카톡 5분동안 받지마" 모두 현재부터.
 - "N분 후부터 M분동안 …" → delivery=현재+N, expires=현재+N+M
 - "N분 후부터 …까지" → delivery=현재+N, expires=끝 시각
 - 반복(매일/요일) → recurrence + window_start/window_end (HH:mm)
@@ -43,6 +45,11 @@ mute/allow target은 한 명령에 하나만. exceptions 필드는 없다.
 User: 카톡 5분동안 받지마
 → condition: delivery={now}, expires=({now}+5분), recurrence=none
 → extract_mute_target: name=["카카오톡"], content=[]
+
+User: 카톡 2분만 받지마
+→ condition: delivery={now}, expires=({now}+2분), recurrence=none
+→ extract_mute_target: name=["카카오톡"], content=[]
+(시작 시각 없어도 "N분만/동안"이면 현재부터)
 
 User: 지금부터 30분 모든 알림 받지마
 → condition: delivery={now}, expires=({now}+30분)
@@ -86,8 +93,10 @@ User: 월수금 오후 2시부터 5시까지 카톡만 받아
 → condition: recurrence=weekly, days_of_week=[1,3,5], window_start=14:00, window_end=17:00
 → extract_allow_target: name=["카카오톡"], content=[]
 
-## 앱 이름 정규화
-카톡→카카오톡, 인스타→인스타그램, 페북→페이스북, 유튜브→YouTube"""
+## 앱 이름 (name)
+- name에는 사용자에게 보이는 앱 표시 이름을 넣는다.
+- 약어는 일반 표기로: 카톡→카카오톡, 인스타→인스타그램, 페북→페이스북, 유튜브→YouTube
+- packageName은 넣지 않는다. 패키지 매핑은 서버가 기기 설치 목록으로 한다."""
 
 # 현재 시간을 지정해 function calling용 Tool Schema 리스트를 return함.
 def build_openai_tools(now: str) -> list[dict[str, Any]]:
@@ -98,6 +107,7 @@ def build_openai_tools(now: str) -> list[dict[str, Any]]:
 
 Few-shot:
 - "카톡 5분동안 받지마" → delivery=현재({now}), expires=현재+5분
+- "카톡 2분만 받지마" → delivery=현재({now}), expires=현재+2분 (시작 시각 없어도 N분만/동안이면 현재부터)
 - "지금부터 30분 조용히" → delivery=현재, expires=현재+30분
 - "3분후부터 5분동안 …" → delivery=현재+3분, expires=현재+8분
 - "5분 뒤부터 10분 뒤까지" → delivery=현재+5분, expires=현재+10분
@@ -112,9 +122,10 @@ exceptions 없음. "카톡 빼고 다 받아"도 이 툴로 name=["카카오톡"
 Few-shot:
 (1) 지금부터 30분 모든 알림 받지마 → name=[], content=[]
 (2) 카톡 5분동안 받지마 → name=["카카오톡"], content=[]
-(3) 지금부터 1시간 카톡이랑 인스타 받지마 → name=["카카오톡","인스타그램"], content=[]
-(4) 지금부터 30분 광고 알림 받지마 → name=[], content=["광고"]
-(5) 지금부터 10분 카톡 광고만 받지마 → name=["카카오톡"], content=["광고"]
+(3) 카톡 2분만 받지마 → name=["카카오톡"], content=[]
+(4) 지금부터 1시간 카톡이랑 인스타 받지마 → name=["카카오톡","인스타그램"], content=[]
+(5) 지금부터 30분 광고 알림 받지마 → name=[], content=["광고"]
+(6) 지금부터 10분 카톡 광고만 받지마 → name=["카카오톡"], content=["광고"]
 약어: 카톡→카카오톡, 인스타→인스타그램."""
 
     allow_desc = """'…만 받아/허용/수신' 명령 전용 (화이트리스트, allow default).
@@ -297,13 +308,20 @@ def _parse_tool_calls(ai: AIMessage) -> tuple[dict | None, dict | None, dict | N
                 allow_target = args
     return condition, mute_target, allow_target
 
-# 메인 처리 로직 : (사용자 프롬프트, 현재 시간) 입력 -> (targetFixed, condition 포함한 Response Json) 반환
+# 메인 처리 로직 : (프롬프트, 현재 시간, 설치 앱) → targetFixed(+packages) / condition
 @traceable(name="handle")
-def handle(prompt: str, current_time: str) -> dict[str, Any]:
+def handle(
+    prompt: str,
+    current_time: str,
+    installed_apps: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """
     PromptEngine.handle 대응.
-    성공: ok=True, targetFixed, condition, assistantMessage
+    성공: ok=True, targetFixed{name, packages, ...}, condition, assistantMessage
     실패: ok=False, assistantMessage
+
+    installed_apps가 있고 name이 비어 있지 않으면 cosine으로 packages를 채운다.
+    매칭 실패 시 ok=False. installed_apps가 비어 있으면 packages=[] (eval 호환).
     """
     llm = ChatOpenAI(model="gpt-4o", temperature=0).bind_tools( # temperature = 0 으로 출력 변동성을 없앰. 예상 가능한 값이 나올 수 있도록 처리.
         build_openai_tools(current_time), # tools 정의 목록 생성
@@ -380,9 +398,31 @@ def handle(prompt: str, current_time: str) -> dict[str, Any]:
             "assistantMessage": "받을 앱이나 키워드가 없어요. ‘카톡만 받아줘’처럼 대상을 알려주세요.",
         }
 
+    packages: list[str] = []
+    mapping_scores: list[dict[str, Any]] = []
+    if names:
+        apps = installed_apps or []
+        if apps:
+            from app.app_mapper import resolve_packages
+
+            packages, unresolved, mapping_scores = resolve_packages(names, apps)
+            if unresolved:
+                joined = ", ".join(f"‘{n}’" for n in unresolved)
+                return {
+                    "ok": False,
+                    "assistantMessage": (
+                        f"{joined} 앱을 기기에서 찾지 못했어요. "
+                        "설치된 앱 이름에 가깝게 다시 말씀해주세요."
+                    ),
+                    # 디버그 전용 — eval GT에 없으면 채점 안 함
+                    "mappingScores": mapping_scores,
+                }
+        # apps 없으면 packages=[] — LangSmith name-only eval 호환
+
     target_fixed = {
         "mute": resolved_mute,
         "name": names,
+        "packages": packages,
         "content": contents,
         "exceptions": [],
     }
@@ -393,4 +433,6 @@ def handle(prompt: str, current_time: str) -> dict[str, Any]:
         "condition": condition,
         "assistantMessage": assistant_content
         or ("규칙을 등록했습니다." if resolved_mute else "허용 규칙을 등록했습니다."),
+        # 디버그 전용 — eval GT에 없으면 채점 안 함
+        "mappingScores": mapping_scores,
     }

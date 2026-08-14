@@ -1,0 +1,15 @@
+[
+  {"packageName": "com.kakao.talk", "labels": ["카카오톡"]},
+  {"packageName": "com.instagram.android", "labels": ["인스타그램"]},
+  {"packageName": "com.facebook.katana", "labels": ["페이스북"]},
+  {"packageName": "com.google.android.gm", "labels": ["Gmail"]},
+  {"packageName": "viva.republica.toss", "labels": ["토스"]},
+  {"packageName": "com.google.android.youtube", "labels": ["YouTube"]},
+  {"packageName": "com.coupang.mobile.eats", "labels": ["쿠팡이츠"]},
+  {"packageName": "com.nhn.android.search", "labels": ["네이버"]},
+  {"packageName": "com.nhn.android.webtoon", "labels": ["네이버 웹툰"]},
+  {"packageName": "com.samsung.android.messaging", "labels": ["메시지"]},
+  {"packageName": "com.android.vending", "labels": ["Play 스토어", "Google Play 스토어"]},
+  {"packageName": "kr.co.jobkorea.app", "labels": ["잡코리아"]},
+  {"packageName": "com.sec.android.app.clockpackage", "labels": ["시계"]}
+]

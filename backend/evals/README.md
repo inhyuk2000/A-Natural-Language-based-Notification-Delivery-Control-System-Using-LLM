@@ -1,7 +1,9 @@
-# PromptEngine Evaluation — v1 Spec
+# PromptEngine Evaluation — v1 Spec (auto app mapping)
 
-현재 [`app/prompt_engine.py`](../app/prompt_engine.py) + [`app/schemas.py`](../app/schemas.py) 기준 baseline이다.  
-평가 진입점: `app.prompt_engine.handle(prompt, current_time)`.
+현재 [`app/prompt_engine.py`](../app/prompt_engine.py) + [`app/schemas.py`](../app/schemas.py) + [`app/app_mapper.py`](../app/app_mapper.py) 기준.
+
+평가 진입점: `handle(prompt, current_time, installed_apps=...)`.  
+Experiment runner는 [`fixtures/installed_apps_v1.json`](fixtures/installed_apps_v1.json) 을 기본 주입한다.
 
 ---
 
@@ -9,13 +11,15 @@
 
 | 항목 | 값 |
 |------|-----|
-| Version | **v1** |
-| Entry point | `app.prompt_engine.handle(prompt, current_time)` |
+| Version | **v1_auto_map** |
+| Entry point | `app.prompt_engine.handle(prompt, current_time, installed_apps)` |
 | API | `POST /v1/extract-rule` |
+| App mapping | OpenAI embedding cosine (`text-embedding-3-small`, threshold≈0.45) |
 | Stack | LangChain `ChatOpenAI` + `bind_tools` |
 | Tracing | LangSmith `@traceable(name="handle")` |
 
-Android [`PromptEngine.kt`](../../app/src/main/java/com/example/app/PromptEngine.kt)는 HTTP 클라이언트이므로 LLM eval 대상이 아니다.
+Android [`PromptEngine.kt`](../../app/src/main/java/com/example/app/PromptEngine.kt)는 HTTP 클라이언트이므로 LLM eval 대상이 아니다.  
+기기 매핑은 **수동 alias 없음** — PackageManager 라벨만 서버로 보낸다.
 
 ---
 
@@ -27,6 +31,7 @@ Android [`PromptEngine.kt`](../../app/src/main/java/com/example/app/PromptEngine
 | temperature | `0` |
 | tool_choice | `auto` |
 | Calls per request | 보통 **2회** — (1) tool extract (2) confirm `assistantMessage` |
+| Embeddings | name[] → packages[] (installedApps 있을 때) |
 
 ---
 
@@ -35,7 +40,10 @@ Android [`PromptEngine.kt`](../../app/src/main/java/com/example/app/PromptEngine
 ```json
 {
   "prompt": "카톡 5분동안 받지마",
-  "currentTime": "2026-08-14T15:00:00+09:00"
+  "currentTime": "2026-08-14T15:00:00+09:00",
+  "installedApps": [
+    { "packageName": "com.kakao.talk", "labels": ["카카오톡"] }
+  ]
 }
 ```
 
@@ -43,6 +51,7 @@ Android [`PromptEngine.kt`](../../app/src/main/java/com/example/app/PromptEngine
 |------|------|
 | `prompt` | 사용자 한국어 명령 |
 | `currentTime` | ISO-8601. 프롬프트/툴의 “현재” 기준 시각 |
+| `installedApps` | 기기 설치 앱 스냅샷. eval runner가 fixture로 채울 수 있음 |
 
 ---
 
@@ -69,7 +78,7 @@ Android [`PromptEngine.kt`](../../app/src/main/java/com/example/app/PromptEngine
 
 ### mute / allow 필드
 
-- `name: string[]` — 앱 정규화 이름
+- `name: string[]` — 표시용 앱 이름 (약어→일반 표기 권장)
 - `content: string[]` — 키워드
 - **exceptions 없음** (후처리에서 항상 `[]`)
 
@@ -79,12 +88,12 @@ Android [`PromptEngine.kt`](../../app/src/main/java/com/example/app/PromptEngine
 - …만 받아/허용/수신 → allow
 - “카톡 빼고 다 받아” → mute, `name=["카카오톡"]`
 
-### 앱 정규화
+### 앱 이름 (LLM) / packages (서버)
 
-- 카톡 → 카카오톡
-- 인스타 → 인스타그램
-- 페북 → 페이스북
-- 유튜브 → YouTube
+- LLM `name`: 카톡→카카오톡, 인스타→인스타그램 등 **표시 이름**
+- 서버: `installedApps` 라벨과 cosine → `targetFixed.packages`
+- 매칭 실패(threshold 미달) → `ok=false` + 재질문
+- `installedApps` 비어 있으면 `packages=[]` (name-only eval 호환)
 
 ### 시간·대상 규칙
 
@@ -108,61 +117,40 @@ Android [`PromptEngine.kt`](../../app/src/main/java/com/example/app/PromptEngine
   "targetFixed": {
     "mute": true,
     "name": ["카카오톡"],
+    "packages": ["com.kakao.talk"],
     "content": [],
     "exceptions": []
   },
-  "condition": {
-    "delivery": { "absolute": "..." },
-    "expires": { "absolute": "..." },
-    "activity": null,
-    "location": null,
-    "recurrence": "none",
-    "days_of_week": [],
-    "window_start": null,
-    "window_end": null
-  },
+  "condition": { "...": "..." },
   "assistantMessage": "한두 문장 확인 문구"
 }
 ```
 
+Android는 **`packages`를 SQLite에 저장**하고 알림 매칭은 packageName 기준(기존과 동일).
+
 ### 실패
 
-시간 또는 대상이 빠져 재질문하는 경우 예 (`카톡만 받아줘`):
-
-```json
-{
-  "ok": false,
-  "assistantMessage": "시간(언제부터 언제까지/몇 분)과 대상…을 함께 말씀해주세요. …"
-}
-```
-
-(`targetFixed` / `condition` 없음)
+시간/대상 누락 또는 앱 cosine 매칭 실패 시 `ok=false` + `assistantMessage` (구조 필드 없음).
 
 ---
 
 ## 6. Post-process (코드 규칙)
 
 1. mute와 allow **둘 다** 호출 → `ok=false`
-2. target 또는 condition 없음 → `ok=false` (시간/대상 누락·tool 미호출 포함)
+2. target 또는 condition 없음 → `ok=false`
 3. allow인데 `name`·`content` 모두 빈 배열 → `ok=false`
 4. 성공 시 `targetFixed.exceptions`는 **항상 `[]`**
-5. `mute` 값은 **툴 선택으로만** 결정 (키워드 휴리스틱 없음)
+5. `mute` 값은 **툴 선택으로만** 결정
+6. `installedApps` + non-empty `name` → cosine `packages`; 미매칭 → `ok=false`
 
 ---
 
-## 7. Eval에서 볼 것 / 안 볼 것
+## 7. Eval에서 볼 것
 
-**Ground truth로 비교할 것**
-
-- `ok`
-- `targetFixed.mute`
-- `name` / `content` (집합 비교)
-- `recurrence`, `days_of_week`, `window_*`
-- `delivery` / `expires` (ISO **exact** — `currentTime` 고정)
-
-**메인 지표로 두지 않을 것**
-
-- `assistantMessage` 문체 (confirm 2차 호출 결과)
+- `ok`, `mute`, `packages` / `content` (집합; reference 키만)
+- `name`은 표시용 중간값이라 **채점하지 않음** (매핑은 `packages`로 평가)
+- `recurrence`, `delivery` / `expires` (ISO exact)
+- `assistantMessage` 문체는 메인 지표 아님
 
 ---
 
@@ -170,17 +158,15 @@ Android [`PromptEngine.kt`](../../app/src/main/java/com/example/app/PromptEngine
 
 | 역할 | 경로 |
 |------|------|
-| 프롬프트 / tools / handle | [`app/prompt_engine.py`](../app/prompt_engine.py) |
-| Request / Response 스키마 | [`app/schemas.py`](../app/schemas.py) |
-| FastAPI | [`app/main.py`](../app/main.py) |
-| Android 클라이언트 | `app/src/main/java/com/example/app/PromptEngine.kt` |
+| handle | [`app/prompt_engine.py`](../app/prompt_engine.py) |
+| Cosine mapper | [`app/app_mapper.py`](../app/app_mapper.py) |
+| Schema | [`app/schemas.py`](../app/schemas.py) |
+| Fixture | [`fixtures/installed_apps_v1.json`](fixtures/installed_apps_v1.json) |
 
 ---
 
 ## 다음 단계
 
-1. `datasets/golden_v1.jsonl` — 유지·확장 (현재 5케이스; `allow_kakao_missing_time` = `ok:false`)
-2. `datasets/golden_user_survey.jsonl` — 사용자 설문 문장 로컬 GT (미지원/`ok:false` 다수)
-3. LangSmith Dataset 재업로드 (`dataset_upload.py`) — 스펙 변경 시 기존 dataset 삭제 후 업로드
-4. `evaluators.py` / `run_experiment.py` — code-based evaluate
-5. baseline experiment 결과 확인
+1. LangSmith Dataset 재업로드 (`dataset_upload.py`) — `packages` GT 반영
+2. `python -m evals.run_experiment`
+3. `APP_MAPPER_THRESHOLD` 튜닝
