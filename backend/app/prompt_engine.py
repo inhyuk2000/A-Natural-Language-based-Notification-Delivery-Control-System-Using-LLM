@@ -17,16 +17,21 @@ TOOL_ALLOW = "extract_allow_target"
 
 # 시스템 프롬프트 few shot learning 관련 코드
 def system_few_shot(now: str) -> str:
-    return f"""당신은 알림 규칙 추출기다. 사용자 한국어 명령을 tool call로만 구조화한다.
-반드시 extract_notification_condition 과 (extract_mute_target | extract_allow_target) 중 하나를 함께 호출한다.
+    return f"""당신은 알림 규칙 추출기다. 사용자 한국어 명령을 구조화한다.
 mute/allow target은 한 명령에 하나만. exceptions 필드는 없다.
 
-## 툴 선택
+## 필수: 시간 조건 + 대상 조건 (둘 다)
+- 성공하려면 **시간 조건**과 **대상 조건(mute|allow)** 을 문장에서 모두 읽을 수 있어야 한다.
+- 둘 다 명확할 때만 extract_notification_condition 과 (extract_mute_target | extract_allow_target) 중 하나를 **함께** 호출한다.
+- 둘 중 하나라도 없으면 **tool을 호출하지 말고**, 부족한 정보(시간 또는 대상)를 짧게 다시 묻는다.
+- 기간·시각을 임의로 추정하지 말 것. (예: 기본 12시간 금지)
+
+## 툴 선택 (대상이 있을 때)
 - 받지마/차단/뮤트/조용/끄/보류 → extract_mute_target
 - …만 받아/허용/수신 (받지마 없음) → extract_allow_target
 - "카톡 빼고 다 받아" = 카톡 받지마 → extract_mute_target, name=["카카오톡"]
 
-## 시간 규칙 (현재={now})
+## 시간 규칙 (현재={now}) — 문장에 시간이 있을 때만 적용
 - 구간은 항상 delivery < expires. delivery==expires 절대 금지.
 - "지금부터 N분(간) …" → delivery=현재, expires=현재+N분
 - "N분 후부터 M분동안 …" → delivery=현재+N, expires=현재+N+M
@@ -48,7 +53,10 @@ User: 3분후부터 5분동안 카톡 받지마
 → extract_mute_target: name=["카카오톡"], content=[]
 
 User: 카톡만 받아줘
-→ condition: delivery={now}, expires=({now}+12시간)  // 기간 미지정 시 12시간
+→ tool 호출 없음 (시간 없음). "몇 분 동안인지, 또는 몇 시까지인지 알려주세요."
+
+User: 지금부터 1시간 카톡만 받아줘
+→ condition: delivery={now}, expires=({now}+1시간)
 → extract_allow_target: name=["카카오톡"], content=[]
 
 User: 지금부터 1시간 카톡이랑 인스타만 받아
@@ -56,10 +64,17 @@ User: 지금부터 1시간 카톡이랑 인스타만 받아
 → extract_allow_target: name=["카카오톡","인스타그램"], content=[]
 
 User: 게임관련 카톡이랑 인스타만 받아줘
-→ condition: delivery={now}, expires=({now}+12시간)
+→ tool 호출 없음 (시간 없음). 시간 재질문.
+
+User: 지금부터 2시간 게임관련 카톡이랑 인스타만 받아줘
+→ condition: delivery={now}, expires=({now}+2시간)
 → extract_allow_target: name=["카카오톡","인스타그램"], content=["게임"]
 
 User: 광고 알림 받지마
+→ tool 호출 없음 (시간 없음). 시간 재질문.
+
+User: 지금부터 30분 광고 알림 받지마
+→ condition: delivery={now}, expires=({now}+30분)
 → extract_mute_target: name=[], content=["광고"]
 
 User: 매일 밤 11시부터 아침 6시까지 조용히
@@ -77,38 +92,42 @@ User: 월수금 오후 2시부터 5시까지 카톡만 받아
 # 현재 시간을 지정해 function calling용 Tool Schema 리스트를 return함.
 def build_openai_tools(now: str) -> list[dict[str, Any]]:
     cond_desc = f"""알림 규칙의 시간·반복 조건을 추출한다. 현재 시각={now}.
-**절대 금지:** delivery와 expires를 같은 시각으로 두지 말 것.
-구간은 반드시 delivery < expires.
+문장에 시작/끝(또는 N분, 매일/요일 구간)이 **명시**되어 있을 때만 이 툴을 호출한다.
+기간을 추정하지 말 것(기본 12시간 금지). 시간 정보가 없으면 이 툴을 호출하지 말 것.
+**절대 금지:** delivery와 expires를 같은 시각으로 두지 말 것. 구간은 반드시 delivery < expires.
 
 Few-shot:
-- "카톡 5분동안 받지마" → delivery=현재({now}), expires=현재+5분 (둘 다 현재+5분 아님!)
+- "카톡 5분동안 받지마" → delivery=현재({now}), expires=현재+5분
 - "지금부터 30분 조용히" → delivery=현재, expires=현재+30분
 - "3분후부터 5분동안 …" → delivery=현재+3분, expires=현재+8분
 - "5분 뒤부터 10분 뒤까지" → delivery=현재+5분, expires=현재+10분
-- 기간 미지정(…만 받아줘) → delivery=현재, expires=현재+12시간
+- "카톡만 받아줘" / "광고 알림 받지마" → 시간 없음 → 이 툴 호출 금지
 - 매일/요일 반복 → recurrence + window_start/window_end"""
 
     mute_desc = """받지마/차단/뮤트/조용/끄 명령 전용 (블랙리스트, mute default).
+시간 조건이 문장에 함께 있을 때만 호출한다. 시간 없으면 호출 금지.
 '…만 받아'에는 이 툴을 쓰지 말 것 → extract_allow_target.
 exceptions 없음. "카톡 빼고 다 받아"도 이 툴로 name=["카카오톡"].
 
 Few-shot:
-(1) 모든 알림 받지마 → name=[], content=[]
-(2) 카톡 받지마 / 카톡 5분동안 받지마 → name=["카카오톡"], content=[]
-(3) 카톡이랑 인스타 받지마 → name=["카카오톡","인스타그램"], content=[]
-(4) 광고 알림 받지마 → name=[], content=["광고"]
-(5) 카톡 광고만 받지마 → name=["카카오톡"], content=["광고"]
+(1) 지금부터 30분 모든 알림 받지마 → name=[], content=[]
+(2) 카톡 5분동안 받지마 → name=["카카오톡"], content=[]
+(3) 지금부터 1시간 카톡이랑 인스타 받지마 → name=["카카오톡","인스타그램"], content=[]
+(4) 지금부터 30분 광고 알림 받지마 → name=[], content=["광고"]
+(5) 지금부터 10분 카톡 광고만 받지마 → name=["카카오톡"], content=["광고"]
 약어: 카톡→카카오톡, 인스타→인스타그램."""
 
     allow_desc = """'…만 받아/허용/수신' 명령 전용 (화이트리스트, allow default).
+시간 조건이 문장에 함께 있을 때만 호출한다. 시간 없으면 호출 금지.
 받지마/차단/뮤트에는 이 툴 금지 → extract_mute_target.
 exceptions 없음. 허용 앱은 모두 name에.
 
 Few-shot:
-(1) 카톡만 받아줘 → name=["카카오톡"], content=[]
-(2) 카톡이랑 인스타만 받아 → name=["카카오톡","인스타그램"], content=[]
-(3) 게임관련 카톡이랑 인스타만 받아줘 → name=["카카오톡","인스타그램"], content=["게임"]
-(4) 엄마 카톡만 받아 → name=["카카오톡"], content=["엄마"]
+(1) 지금부터 1시간 카톡만 받아줘 → name=["카카오톡"], content=[]
+(2) 지금부터 1시간 카톡이랑 인스타만 받아 → name=["카카오톡","인스타그램"], content=[]
+(3) 지금부터 2시간 게임관련 카톡이랑 인스타만 받아줘 → name=["카카오톡","인스타그램"], content=["게임"]
+(4) 지금부터 1시간 엄마 카톡만 받아 → name=["카카오톡"], content=["엄마"]
+(5) "카톡만 받아줘" → 시간 없음 → 이 툴 호출 금지
 약어: 카톡→카카오톡, 인스타→인스타그램."""
 
     return [
@@ -347,8 +366,8 @@ def handle(prompt: str, current_time: str) -> dict[str, Any]:
 
     if raw_target is None or condition is None or condition == {}:
         msg = assistant_content or (
-            "알림 대상이나 조건이 제대로 추출되지 않았습니다."
-            "‘카톡 받지마’ 또는 ‘카톡만 받아줘’처럼 다시 말씀해주세요."
+            "시간(언제부터 언제까지/몇 분)과 대상(어떤 앱·키워드를 받을지·막을지)을 "
+            "함께 말씀해주세요. 예: ‘카톡 5분동안 받지마’, ‘지금부터 1시간 카톡만 받아줘’."
         )
         return {"ok": False, "assistantMessage": msg}
 
