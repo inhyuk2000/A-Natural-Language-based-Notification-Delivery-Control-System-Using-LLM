@@ -39,6 +39,8 @@ def extract_rule(body: ExtractRuleRequest):
             body.prompt.strip(),
             body.currentTime.strip(),
             installed_apps=installed,
+            pending=body.pending,
+            pending_original=body.pendingOriginal,
         )
         return ExtractRuleResponse(**result)
     except Exception as e:

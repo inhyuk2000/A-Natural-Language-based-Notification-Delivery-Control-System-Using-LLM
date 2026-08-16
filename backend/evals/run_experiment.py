@@ -49,9 +49,9 @@ if __name__ == "__main__":
         run_extract,
         data=DATASET_NAME,
         evaluators=[extract_rule_correctness],
-        experiment_prefix="baseline_v2_synonym_time",
+        experiment_prefix="baseline_v4_recurrence_window",
         metadata={
-            "version": "v2_synonym_time",
+            "version": "v4_recurrence_window",
             "model": "gpt-4o",
             "temperature": 0,
             "eval_type": "code_based",

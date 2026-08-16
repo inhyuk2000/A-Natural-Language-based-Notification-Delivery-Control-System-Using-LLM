@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -21,22 +22,25 @@ import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import kotlinx.serialization.json.add
 
 /**
  * 자연어 → 규칙 JSON 추출.
  *
  * LLM Function Calling 은 LangChain FastAPI 백엔드(`/v1/extract-rule`)에서 수행하고,
  * 이 클래스는 API 호출 후 [ContextManager.handleIncomingRule] 로 저장한다.
+ *
+ * ok=false(재질문) 이면 [pendingOriginal] 을 보관하고, 다음 요청에 pending=true 로 보낸다.
+ * 서버 앞단 분류 LLM이 보충/새 명령을 가른다.
  */
-
-//FastAPI LLM 서버에 요청하고 결과를 기존 Android 규칙 시스템에 연결함.
 class PromptEngine(
     private val contextManager: ContextManager,
     private val chatMessages: MutableList<ChatMessage>,
     private val apiBaseUrl: String = BuildConfig.EXTRACT_RULE_API_BASE_URL,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+
+    /** 재질문 대기 중인 최초 사용자 명령. null 이면 pending=false. */
+    private var pendingOriginal: String? = null
 
     suspend fun handle(prompt: String, currentTime: String) {
         chatMessages.add(
@@ -51,10 +55,16 @@ class PromptEngine(
             return
         }
 
-//      FastAPI 서버로 HTTP POST 요청을 보내는 함수
+        val isPending = pendingOriginal != null
         val responseBody = try {
             withContext(Dispatchers.IO) {
-                postExtractRule(base, prompt, currentTime)
+                postExtractRule(
+                    baseUrl = base,
+                    prompt = prompt,
+                    currentTime = currentTime,
+                    pending = isPending,
+                    pendingOriginal = pendingOriginal,
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "extract-rule API 실패", e)
@@ -77,8 +87,16 @@ class PromptEngine(
         }
 
         val assistantMessage = root["assistantMessage"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val classification = root["pendingClassification"]?.jsonPrimitive?.contentOrNull
+        if (classification != null) {
+            Log.d(TAG, "pendingClassification=$classification")
+        }
 
         if (!ok) {
+            // 새로 재질문이 열린 경우에만 원문 저장. 이미 pending이면 최초 원문 유지.
+            if (pendingOriginal == null) {
+                pendingOriginal = prompt
+            }
             appendAssistant(
                 assistantMessage.ifBlank {
                     "알림 대상이나 조건이 제대로 추출되지 않았습니다. " +
@@ -91,6 +109,9 @@ class PromptEngine(
         val targetFixed = root["targetFixed"]?.jsonObject
         val condition = root["condition"]?.jsonObject
         if (targetFixed == null || condition == null || condition.isEmpty()) {
+            if (pendingOriginal == null) {
+                pendingOriginal = prompt
+            }
             appendAssistant(
                 assistantMessage.ifBlank {
                     "알림 대상이나 조건이 제대로 추출되지 않았습니다."
@@ -111,6 +132,9 @@ class PromptEngine(
         val contents = targetFixed.stringList("content")
 
         if (!mute && names.isEmpty() && packages.isEmpty() && contents.isEmpty()) {
+            if (pendingOriginal == null) {
+                pendingOriginal = prompt
+            }
             appendAssistant(
                 assistantMessage.ifBlank {
                     "받을 앱이나 키워드가 없어요. ‘카톡만 받아줘’처럼 대상을 알려주세요."
@@ -144,8 +168,9 @@ class PromptEngine(
         val windowStart = condition.optString("window_start")?.trim().orEmpty()
         val windowEnd = condition.optString("window_end")?.trim().orEmpty()
 
+        val titleSource = pendingOriginal?.let { "$it $prompt" } ?: prompt
         val title = deriveRuleTitleFromTarget(
-            prompt = prompt,
+            prompt = titleSource,
             appNames = names,
             exceptions = emptyList(),
             mute = mute,
@@ -155,7 +180,6 @@ class PromptEngine(
             windowEnd = windowEnd,
         )
 
-        // 서버 JSON → DB용 (packages = cosine 매핑 결과, name = 표시용)
         val targetForDb = buildJsonObject {
             put("mute", JsonPrimitive(mute))
             putJsonArray("name") { names.forEach { add(JsonPrimitive(it)) } }
@@ -176,6 +200,7 @@ class PromptEngine(
             return
         }
 
+        pendingOriginal = null
         appendAssistant(
             assistantMessage.ifBlank { "규칙을 등록했습니다: $title" },
         )
@@ -195,7 +220,13 @@ class PromptEngine(
         }.filter { it.isNotBlank() }
     }
 
-    private fun postExtractRule(baseUrl: String, prompt: String, currentTime: String): String {
+    private fun postExtractRule(
+        baseUrl: String,
+        prompt: String,
+        currentTime: String,
+        pending: Boolean,
+        pendingOriginal: String?,
+    ): String {
         val url = URL("$baseUrl/v1/extract-rule")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -209,6 +240,10 @@ class PromptEngine(
             put("prompt", prompt)
             put("currentTime", currentTime)
             put("installedApps", AppNameMapper.getInstalledAppsJsonArray())
+            put("pending", pending)
+            if (pending && !pendingOriginal.isNullOrBlank()) {
+                put("pendingOriginal", pendingOriginal)
+            }
         }.toString()
         payload.chunked(3000).forEachIndexed { i, part ->
             Log.d(TAG, "payload[$i]=$part")

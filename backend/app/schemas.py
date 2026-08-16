@@ -20,6 +20,15 @@ class ExtractRuleRequest(BaseModel):
         default_factory=list,
         description="Device-installed apps: packageName + labels for cosine mapping",
     )
+    # 재질문 대기 중이면 true. 직전 미완성 명령을 pendingOriginal 에 담아 보낸다.
+    pending: bool = Field(
+        default=False,
+        description="True when the client is waiting for a clarification follow-up",
+    )
+    pendingOriginal: str | None = Field(
+        default=None,
+        description="Original user command that triggered clarification (required when pending)",
+    )
 
 
 # 서버가 클라이언트에게 반환할 데이터 형식임.
@@ -30,3 +39,5 @@ class ExtractRuleResponse(BaseModel):
     assistantMessage: str = ""
     # 디버그용 cosine 매칭 상세. eval GT에 넣지 않으면 채점 대상 아님.
     mappingScores: list[dict[str, Any]] | None = None
+    # pending 턴에서 분류 결과 (supplement|new_command). 디버그/로그용.
+    pendingClassification: str | None = None
