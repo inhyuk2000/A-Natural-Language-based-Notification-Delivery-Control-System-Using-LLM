@@ -3,7 +3,8 @@ NotiLLM extract-rule API
 Android PromptEngine LLM 구간을 LangChain으로 수행.
 
 PROMPT_ENGINE_VERSION=v1 (기본) → app.v1.prompt_engine.handle
-PROMPT_ENGINE_VERSION=v2         → app.v2.prompt_engine.handle (LangGraph 라우팅)
+PROMPT_ENGINE_VERSION=v2         → app.v2.prompt_engine.handle (LangGraph LLM 라우팅)
+PROMPT_ENGINE_VERSION=v3         → app.v3.prompt_engine.handle (경량 classifier + pending-first)
 """
 from __future__ import annotations
 
@@ -18,7 +19,9 @@ from app.schemas import ExtractRuleRequest, ExtractRuleResponse
 load_dotenv()
 
 _VERSION = os.getenv("PROMPT_ENGINE_VERSION", "v1").strip().lower()
-if _VERSION == "v2":
+if _VERSION == "v3":
+    from app.v3.prompt_engine import handle
+elif _VERSION == "v2":
     from app.v2.prompt_engine import handle
 else:
     from app.v1.prompt_engine import handle

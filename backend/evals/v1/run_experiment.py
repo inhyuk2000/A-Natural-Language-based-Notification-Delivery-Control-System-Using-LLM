@@ -1,9 +1,10 @@
 """
 PromptEngine v1 LangSmith Experiment runner
-1. Dataset  - promptengine_golden_v1
+1. Dataset  - promptengine_golden_v2  (A/B 비교용으로 v2 dataset 고정)
 2. Target   - app.v1.prompt_engine.handle (+ installedApps fixture)
 3. Evaluator- evals.v1.evaluators.extract_rule_correctness
 실행 (backend/ 에서):
+  python -m evals.v2.dataset_upload   # dataset 없으면 먼저
   python -m evals.v1.run_experiment
 """
 
@@ -20,7 +21,7 @@ from app.v1.prompt_engine import handle
 from evals.v1.evaluators import extract_rule_correctness
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
-DATASET_NAME = "promptengine_golden_v1"
+DATASET_NAME = "promptengine_golden_v2"
 FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "installed_apps_device.json"
 load_dotenv(BACKEND_ROOT / ".env")
 
@@ -43,7 +44,7 @@ if __name__ == "__main__":
         run_extract,
         data=DATASET_NAME,
         evaluators=[extract_rule_correctness],
-        experiment_prefix="baseline_v1",
+        experiment_prefix="baseline_v1_on_golden_v2",
         metadata={
             "prompt_engine": "v1",
             "model": "gpt-4o",

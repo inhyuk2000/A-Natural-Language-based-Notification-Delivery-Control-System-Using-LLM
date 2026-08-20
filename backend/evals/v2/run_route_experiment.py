@@ -5,7 +5,9 @@ Target: app.v2.prompt_engine.route_intent (gpt-4o-mini)
 평가: route_correctness 만 (extract LLM 호출 없음 → 저렴/빠름)
 
 Dataset example.outputs 에 dialogIntent|route|expectedRoute 가 있으면 그걸 쓰고,
-없으면 extract 로 간주 (현재 golden_v1 호환).
+없으면 extract 로 간주.
+
+Dataset: promptengine_golden_v2
 
 실행 (backend/ 에서):
   python -m evals.v2.run_route_experiment
@@ -23,7 +25,7 @@ from app.v2.prompt_engine import route_intent
 from evals.v2.evaluators import route_correctness
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
-DATASET_NAME = "promptengine_golden_v1"
+DATASET_NAME = "promptengine_golden_v2"
 load_dotenv(BACKEND_ROOT / ".env")
 
 
@@ -50,7 +52,7 @@ if __name__ == "__main__":
             "model": "gpt-4o-mini",
             "eval_type": "code_based",
             "dataset": DATASET_NAME,
-            "note": "route-only; no gpt-4o extract calls",
+            "note": "route-only; dataset golden_v2",
         },
         max_concurrency=4,
     )

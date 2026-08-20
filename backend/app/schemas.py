@@ -43,8 +43,8 @@ class ExtractRuleResponse(BaseModel):
     pendingClassification: str | None = None
     # ok=false 사유. Android는 needsSupplement=true 일 때만 pending 저장.
     # incomplete_rule | missing_time | missing_target | empty_allow_target
-    # | app_unresolved | tool_conflict | chitchat | none
+    # | app_unresolved | tool_conflict | chitchat | cancelled | none
     failReason: str | None = None
     needsSupplement: bool = False
-    # v2 라우터: chitchat | extract
+    # v2/v3: chitchat|extract|reject
     dialogIntent: str | None = None

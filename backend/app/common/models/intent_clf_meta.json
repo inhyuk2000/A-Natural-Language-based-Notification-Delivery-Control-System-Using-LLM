@@ -1,0 +1,5 @@
+{
+  "encoder": "paraphrase-multilingual-MiniLM-L12-v2",
+  "n_extract": 15,
+  "n_reject": 16
+}

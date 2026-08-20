@@ -104,7 +104,12 @@ class PromptEngine(
                 pendingOriginal = prompt
             }
             val failReason = root["failReason"]?.jsonPrimitive?.contentOrNull
-            if (!needsSupplement && (failReason == "chitchat" || failReason == "tool_conflict")) {
+            if (!needsSupplement && (
+                    failReason == "chitchat" ||
+                        failReason == "tool_conflict" ||
+                        failReason == "cancelled"
+                    )
+            ) {
                 pendingOriginal = null
             } else if (!needsSupplement && !isPending) {
                 pendingOriginal = null
