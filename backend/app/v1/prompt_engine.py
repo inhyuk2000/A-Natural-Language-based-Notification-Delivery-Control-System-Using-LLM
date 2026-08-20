@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_openai import ChatOpenAI
 from langsmith import traceable
 
-from app.pending import resolve_extract_prompt
+from app.common.pending import resolve_extract_prompt
 
 # 통합 툴: condition + mode(mute|allow) + name/content 를 한 번에 받음.
 # (구) extract_notification_condition / extract_mute_target / extract_allow_target
@@ -509,7 +509,7 @@ def handle(
     if names:
         apps = installed_apps or []
         if apps:
-            from app.app_mapper import resolve_packages
+            from app.common.app_mapper import resolve_packages
 
             packages, unresolved, mapping_scores = resolve_packages(names, apps)
             if unresolved:

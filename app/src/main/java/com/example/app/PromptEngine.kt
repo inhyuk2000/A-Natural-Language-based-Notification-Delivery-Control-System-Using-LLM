@@ -93,9 +93,21 @@ class PromptEngine(
         }
 
         if (!ok) {
-            // 새로 재질문이 열린 경우에만 원문 저장. 이미 pending이면 최초 원문 유지.
-            if (pendingOriginal == null) {
+            // 정보 부족 재질문만 pending. chitchat/앱매핑실패 등은 pending 안 함.
+            val needsSupplement = when (val el = root["needsSupplement"]) {
+                is JsonPrimitive ->
+                    el.contentOrNull?.equals("true", ignoreCase = true) == true ||
+                        runCatching { el.content.toBoolean() }.getOrDefault(false)
+                else -> false
+            }
+            if (needsSupplement && pendingOriginal == null) {
                 pendingOriginal = prompt
+            }
+            val failReason = root["failReason"]?.jsonPrimitive?.contentOrNull
+            if (!needsSupplement && (failReason == "chitchat" || failReason == "tool_conflict")) {
+                pendingOriginal = null
+            } else if (!needsSupplement && !isPending) {
+                pendingOriginal = null
             }
             appendAssistant(
                 assistantMessage.ifBlank {

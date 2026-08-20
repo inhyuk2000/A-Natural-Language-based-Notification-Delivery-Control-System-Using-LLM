@@ -14,7 +14,7 @@ _PENDING_CLASSIFY_SYSTEM = """당신은 알림 규칙 대화 분류기다. 사�
 
 출력은 반드시 한 줄, 소문자 토큰만: supplement 또는 new_command"""
 
-# 재질문 대기 중일 때, 이번 입력이 보충인지 새 명령인지 LLM으로 판별.
+
 @traceable(name="classify_pending_turn")
 def classify_pending_turn(pending_original: str, current_prompt: str) -> str:
     """pending 턴 전용. 분류 라벨만 반환."""
@@ -37,10 +37,9 @@ def classify_pending_turn(pending_original: str, current_prompt: str) -> str:
         return "new_command"
     if "supplement" in raw:
         return "supplement"
-    # 파싱 실패 시 새 명령으로 처리해 잘못 합치지 않음
     return "new_command"
 
-# handle 앞에서 추출용 prompt 문자열을 만드는 진입점.
+
 def resolve_extract_prompt(
     prompt: str,
     pending: bool,

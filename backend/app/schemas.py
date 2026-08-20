@@ -41,3 +41,10 @@ class ExtractRuleResponse(BaseModel):
     mappingScores: list[dict[str, Any]] | None = None
     # pending 턴에서 분류 결과 (supplement|new_command). 디버그/로그용.
     pendingClassification: str | None = None
+    # ok=false 사유. Android는 needsSupplement=true 일 때만 pending 저장.
+    # incomplete_rule | missing_time | missing_target | empty_allow_target
+    # | app_unresolved | tool_conflict | chitchat | none
+    failReason: str | None = None
+    needsSupplement: bool = False
+    # v2 라우터: chitchat | extract
+    dialogIntent: str | None = None

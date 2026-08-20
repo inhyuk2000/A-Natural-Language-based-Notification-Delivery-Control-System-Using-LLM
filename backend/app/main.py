@@ -1,6 +1,9 @@
 """
 NotiLLM extract-rule API
 Android PromptEngine LLM 구간을 LangChain으로 수행.
+
+PROMPT_ENGINE_VERSION=v1 (기본) → app.v1.prompt_engine.handle
+PROMPT_ENGINE_VERSION=v2         → app.v2.prompt_engine.handle (LangGraph 라우팅)
 """
 from __future__ import annotations
 
@@ -10,10 +13,15 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.prompt_engine import handle
 from app.schemas import ExtractRuleRequest, ExtractRuleResponse
 
 load_dotenv()
+
+_VERSION = os.getenv("PROMPT_ENGINE_VERSION", "v1").strip().lower()
+if _VERSION == "v2":
+    from app.v2.prompt_engine import handle
+else:
+    from app.v1.prompt_engine import handle
 
 app = FastAPI(title="NotiLLM Extract Rule API", version="1.0.0")
 app.add_middleware(
@@ -23,10 +31,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# health router는 status 확인용.
+
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "promptEngine": _VERSION}
 
 
 @app.post("/v1/extract-rule", response_model=ExtractRuleResponse)
@@ -34,7 +42,7 @@ def extract_rule(body: ExtractRuleRequest):
     if not os.getenv("OPENAI_API_KEY"):
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not set on the server")
     try:
-        installed = [app.model_dump() for app in body.installedApps]
+        installed = [app_item.model_dump() for app_item in body.installedApps]
         result = handle(
             body.prompt.strip(),
             body.currentTime.strip(),

@@ -19,7 +19,6 @@ from typing import Any
 from openai import OpenAI
 
 EMBED_MODEL = os.getenv("APP_MAPPER_EMBED_MODEL", "text-embedding-3-small")
-# 짧은 한글 별칭(카톡↔카카오톡)도 통과하도록 다소 낮게 시작. eval로 튜닝.
 SIMILARITY_THRESHOLD = float(os.getenv("APP_MAPPER_THRESHOLD", "0.45"))
 
 _SYNONYM_PATH = Path(__file__).with_name("app_synonyms.json")
@@ -40,9 +39,7 @@ def _cosine(a: list[float], b: list[float]) -> float:
 def _embed_texts(client: OpenAI, texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
-    # OpenAI embeddings API: batch ok
     resp = client.embeddings.create(model=EMBED_MODEL, input=texts)
-    # data 순서는 input 순서와 동일
     by_index = sorted(resp.data, key=lambda d: d.index)
     return [list(d.embedding) for d in by_index]
 
@@ -52,7 +49,6 @@ def _norm_key(s: str) -> str:
 
 
 def _load_synonym_map() -> dict[str, list[str]]:
-    """각 단어 → 같은 그룹의 모든 표기 (원문 표기 유지)."""
     global _SYNONYM_MAP
     if _SYNONYM_MAP is not None:
         return _SYNONYM_MAP
@@ -72,7 +68,6 @@ def _load_synonym_map() -> dict[str, list[str]]:
 
 
 def _expand_queries(name: str) -> list[str]:
-    """동의어 그룹이 있으면 그룹 전체(+원문), 없으면 [name]."""
     syn = _load_synonym_map()
     group = syn.get(_norm_key(name))
     if not group:
@@ -86,7 +81,6 @@ def _expand_queries(name: str) -> list[str]:
 
 
 def _normalize_apps(installed_apps: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """[{packageName, labels: [str]}] 정규화."""
     out: list[dict[str, Any]] = []
     if not installed_apps:
         return out
@@ -115,14 +109,6 @@ def resolve_packages(
     *,
     threshold: float = SIMILARITY_THRESHOLD,
 ) -> tuple[list[str], list[str], list[dict[str, Any]]]:
-    """
-    names(표시용 앱 이름) → packageName 목록.
-
-    동의어가 있으면 쿼리를 확장한 뒤, 확장어×라벨 cosine 최댓값으로 매칭.
-
-    Returns:
-      (packages, unresolved_names, mapping_scores)
-    """
     cleaned = [n.strip() for n in names if isinstance(n, str) and n.strip()]
     if not cleaned:
         return [], [], []
@@ -141,14 +127,12 @@ def resolve_packages(
             for n in cleaned
         ]
 
-    # 후보: (packageName, label) 평탄화
     candidates: list[tuple[str, str]] = []
     for app in apps:
         pkg = app["packageName"]
         for lab in app["labels"]:
             candidates.append((pkg, lab))
 
-    # name → 확장 쿼리들
     expansions: list[list[str]] = [_expand_queries(n) for n in cleaned]
     unique_queries: list[str] = []
     seen_q: set[str] = set()

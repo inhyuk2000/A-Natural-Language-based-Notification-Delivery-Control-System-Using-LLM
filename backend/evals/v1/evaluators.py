@@ -12,13 +12,12 @@ LangSmith Evaluation 개념 (최신 SDK):
 from __future__ import annotations
 from typing import Any
 
-# 리스트를 집합(set) 으로 바꿉니다.
-# ["카카오톡", "인스타그램"]과 ["인스타그램", "카카오톡"]처럼 순서만 다른 경우도 같게 보려고 씁니다.
+
 def _as_set(xs: Any) -> set[str]:
     """list → set. name/content 순서 무시 비교. 빈/비문자열 제외."""
     return {x for x in (xs or []) if isinstance(x, str) and x.strip()}
 
-# {"absolute": "2026-08-14T15:00:00+09:00"} 형태에서 ISO 시각 문자열만 꺼냅니다.
+
 def _abs(obj: Any) -> str | None:
     """condition.delivery|expires 형태 {"absolute": ISO} → 문자열."""
     if isinstance(obj, dict):
@@ -26,12 +25,11 @@ def _abs(obj: Any) -> str | None:
         return v if isinstance(v, str) else None
     return None
 
-# 본채점 함수. LangSmith가 케이스마다 호출합니다.
+
 def extract_rule_correctness(
-    outputs: dict, # Target(handle) 반환값
-    reference_outputs: dict, # Dataset example.outputs
+    outputs: dict,
+    reference_outputs: dict,
 ) -> dict:
-    
     """
     ExtractRule JSON 정답 일치도 (binary code metric).
     LangSmith evaluate()가 Example마다 호출:
@@ -43,16 +41,12 @@ def extract_rule_correctness(
 
     delivery/expires 는 currentTime이 고정이므로 ISO 문자열 exact match.
     """
-    
     pred = outputs or {}
     exp = reference_outputs or {}
     checks: dict[str, bool] = {}
 
-    # ok (성공/실패) — router 성격
     checks["ok"] = bool(pred.get("ok")) == bool(exp.get("ok"))
 
-    # 정답이 실패면 구조 필드 없음 → ok만 채점
-    # 예: "카톡만 받아줘" (시간 없음) → ok=false
     if not exp.get("ok"):
         return {
             "key": "extract_rule_correctness",
@@ -60,9 +54,6 @@ def extract_rule_correctness(
             "comment": str(checks),
         }
 
-    # 성공 정답 → targetFixed / condition 필드 비교
-    # 정답에 있는 키만 검사 (부분 reference 허용)
-    # mappingScores 는 디버그 전용 — reference에 없으면 여기서 비교하지 않음
     pt = pred.get("targetFixed") or {}
     et = exp.get("targetFixed") or {}
     pc = pred.get("condition") or {}
@@ -70,8 +61,6 @@ def extract_rule_correctness(
 
     if "mute" in et:
         checks["mute"] = bool(pt.get("mute")) == bool(et.get("mute"))
-    # name 은 표시용 중간값(지메일/Gmail 등)이라 채점하지 않음.
-    # 매핑 성공 여부는 packages(packageName)로만 본다.
     if "packages" in et:
         checks["packages"] = _as_set(pt.get("packages")) == _as_set(et.get("packages"))
     if "content" in et:
