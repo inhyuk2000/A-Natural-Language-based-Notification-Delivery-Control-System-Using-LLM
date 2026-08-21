@@ -15,8 +15,10 @@ from app.v3 import prompt_engine as v3
 
 
 @pytest.fixture(autouse=True)
-def _use_heuristic_classifier():
+def _use_heuristic_classifier(monkeypatch):
     set_intent_classifier(HeuristicIntentClassifier())
+    # Unit tests use regex pending resolver (no OpenAI).
+    monkeypatch.setenv("PENDING_RESOLVER", "rules")
     yield
     set_intent_classifier(None)
 
@@ -168,6 +170,24 @@ def test_pending_unresolved():
     assert out["failReason"] == "incomplete_rule"
     assert out["needsSupplement"] is True
     assert out["pendingClassification"] == "UNRESOLVED"
+
+
+def test_pending_resolver_llm_mocked():
+    from app.common import pending_resolver as pr
+
+    class _AI:
+        content = "NEW_REQUEST"
+
+    with patch.object(pr, "ChatOpenAI") as mock_llm:
+        mock_llm.return_value.invoke.return_value = _AI()
+        with patch.dict("os.environ", {"PENDING_RESOLVER": "llm"}):
+            assert (
+                pr.resolve_pending_action(
+                    "카톡 알림 받지마", "아 됐고 인스타 알림 받지마"
+                )
+                == "NEW_REQUEST"
+            )
+        mock_llm.assert_called()
 
 
 def test_validator_missing_time():

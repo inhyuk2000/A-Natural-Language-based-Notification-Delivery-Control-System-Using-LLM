@@ -55,6 +55,20 @@ def run_v3(inputs: dict[str, Any]) -> dict[str, Any]:
 
 
 if __name__ == "__main__":
+    # Cold-start SentenceTransformer + LR before LangSmith runs,
+    # so experiment latency excludes model load time.
+    import time
+
+    from app.common.intent_classifier import classify_intent
+
+    t0 = time.perf_counter()
+    _ = classify_intent("warmup")
+    _ = classify_intent("카톡 30분 받지마")
+    print(
+        f"[v3 warmup] intent classifier ready in {time.perf_counter() - t0:.2f}s "
+        f"(INTENT_CLASSIFIER={os.getenv('INTENT_CLASSIFIER', 'auto')})"
+    )
+
     results = evaluate(
         run_v3,
         data=DATASET_NAME,
@@ -76,7 +90,8 @@ if __name__ == "__main__":
             "temperature": 0,
             "eval_type": "code_based",
             "dataset": DATASET_NAME,
-            "note": "same dataset as v1/v2 A/B; reject≡chitchat for route metric",
+            "note": "warmup before evaluate; reject≡chitchat for route metric",
+            "warmup": True,
         },
         max_concurrency=2,
     )

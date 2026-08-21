@@ -2,8 +2,8 @@
 PromptEngine v3 — Pending-first + lightweight intent classifier + LLM extract.
 
 Flow:
-  pending? → pending_resolver (CONTINUE/UPDATE/CANCEL/NEW_REQUEST/UNRESOLVED)
-  else     → intent_classifier (extract|reject)
+  pending? → pending_resolver (gpt-4o-mini: CONTINUE/UPDATE/CANCEL/NEW_REQUEST/UNRESOLVED)
+  else     → intent_classifier (extract|reject; no LLM)
                reject → immediate template (no LLM)
                extract → gpt-4o tools + code rule_validator
 """
@@ -33,7 +33,7 @@ _REJECT_REPLIES = [
     "‘카톡 5분동안 받지마’처럼 시간과 대상을 함께 말씀해주세요.",
 ]
 
-
+# 실패 응답 JSON 생성
 def _fail(
     message: str,
     fail_reason: str,
@@ -64,7 +64,7 @@ def _reject_response() -> dict[str, Any]:
         dialog_intent="reject",
     )
 
-
+# function calling 기능 + code rule_validator를 활용한 기존 LLM extractor
 @traceable(name="v3_extract")
 def run_extract(
     extract_prompt: str,
@@ -196,7 +196,7 @@ def run_extract(
         "dialogIntent": dialog_intent,
     }
 
-
+# API 진입점 handle()는 v3_extract()를 호출하기 전에 pending-first + lightweight intent classifier를 수행합니다.
 @traceable(name="handle_v3")
 def handle(
     prompt: str,
