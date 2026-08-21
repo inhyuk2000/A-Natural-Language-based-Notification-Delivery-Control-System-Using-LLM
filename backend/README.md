@@ -27,6 +27,17 @@ cd backend
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+### Docker (v3)
+
+```powershell
+cd backend
+docker build -t notillm-api .
+docker run --rm -p 8000:8000 --env-file .env notillm-api
+```
+
+Image defaults: `PROMPT_ENGINE_VERSION=v3`, `INTENT_CLASSIFIER=auto`, `PENDING_RESOLVER=llm`.  
+Put secrets only in `.env` (`OPENAI_API_KEY=...`). Health: `GET http://127.0.0.1:8000/health`
+
 - Health: `GET http://127.0.0.1:8000/health`
 - Extract: `POST http://127.0.0.1:8000/v1/extract-rule`
 
