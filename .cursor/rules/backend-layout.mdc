@@ -1,0 +1,14 @@
+---
+description: Backend engine layout the agent must keep
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Backend layout
+
+- New prompt-engine behavior goes in `backend/app/v3` and shared helpers in `backend/app/common`.
+- Leave `backend/app/v1` and `backend/app/v2` in place so older experiments still run.
+- Extraction prompt text lives in `system_few_shot` inside `backend/app/v1/prompt_engine.py`. v2 and v3 call that function.
+- Unit tests live in `backend/tests/` and must mock OpenAI.
+- Route regression lives in `backend/evals/gate.py`. It scores `golden_v2.jsonl` with `HeuristicIntentClassifier` and `route_correctness`.
+- Do not import `sentence_transformers` at module import time. The embedding classifier already loads it lazily.

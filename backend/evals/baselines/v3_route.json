@@ -1,0 +1,9 @@
+{
+  "metric": "route_correctness",
+  "dataset": "evals/v2/datasets/golden_v2.jsonl",
+  "classifier": "HeuristicIntentClassifier",
+  "n": 85,
+  "passed": 85,
+  "min_score": 1.0,
+  "note": "CI blocks a merge when heuristic route_correctness on golden_v2 falls below min_score. This gate does not call OpenAI."
+}

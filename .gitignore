@@ -4,7 +4,12 @@
 local.properties
 /.idea/
 .idea/
-.cursor/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
+!.cursor/hooks/
+!.cursor/hooks/**
+!.cursor/hooks.json
 .kotlin/
 .DS_Store
 /build

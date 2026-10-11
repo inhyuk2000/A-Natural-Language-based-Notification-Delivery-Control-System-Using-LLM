@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": "python -X utf8 .cursor/hooks/guard.py",
+        "failClosed": true
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "python -X utf8 .cursor/hooks/guard.py",
+        "failClosed": true
+      }
+    ],
+    "stop": [
+      {
+        "command": "python -X utf8 .cursor/hooks/verify_on_stop.py",
+        "timeout": 180,
+        "loop_limit": 1
+      }
+    ]
+  }
+}
