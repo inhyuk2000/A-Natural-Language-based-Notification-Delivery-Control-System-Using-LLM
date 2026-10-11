@@ -11,18 +11,27 @@
 
 ## 작업 순서
 
+코드를 고치는 요청이면, 파일을 수정하기 전에 저장소 루트에서 아래를 실행한다. 질문만 한 경우에는 브랜치를 만들지 않는다. 이미 그 작업 브랜치에 있으면 다시 만들지 않는다.
+
+```powershell
+git checkout main
+git pull origin main
+git checkout -b 작업이름
+```
+
+작업이름 예: `eval/reject-unsafe`
+
 1. GitHub Issue 하나로 요구사항과 완료 조건을 적는다.
-2. `main`에서 브랜치를 만든다. 이름 예: `fix/pending-cancel`.
-3. 그 이슈 범위만 수정한다.
-4. `backend`에서 `pytest tests`를 돌린다.
-5. 아래 파일이 바뀌면 `python -m evals.gate`도 돌린다.
+2. 그 이슈 범위만 수정한다.
+3. `backend`에서 `python -m pytest tests`를 돌린다.
+4. 아래 파일이 바뀌면 `python -m evals.gate`도 돌린다.
    - `backend/app/v1/prompt_engine.py`
    - `backend/app/v2/prompt_engine.py`
    - `backend/app/v3/prompt_engine.py`
    - `backend/evals/**`
-6. PR 본문에 요구사항, 변경 내용, 테스트 결과, eval 결과를 채운다.
+5. 테스트가 통과하면 그 브랜치를 푸시하고 PR을 연다. 본문에는 요구사항, 변경 내용, 테스트 결과, eval 결과를 적는다.
 
-`main`에 직접 푸시하지 않는다. 커밋 메시지에는 무엇을 바꿨는지와 왜 바꿨는지를 같이 쓴다.
+`main`에는 커밋하거나 푸시하지 않는다. 커밋 메시지에는 무엇을 바꿨는지와 왜 바꿨는지를 같이 쓴다.
 
 ## 금지
 
@@ -34,7 +43,7 @@
 ## 게이트
 
 - 매 PR: `.github/workflows/backend-tests.yml`이 `pytest tests`와 시크릿 스캔을 돌린다.
-- 프롬프트·엔진·eval이 바뀐 PR: `.github/workflows/eval-gate.yml`이 Golden Set 85개의 `route_correctness`를 기준선과 비교한다. 기준선보다 낮으면 실패한다.
+- 매 PR: `.github/workflows/eval-gate.yml`이 Golden Set 85개의 `route_correctness`를 기준선과 비교한다. 기준선보다 낮으면 실패한다.
 - 기준선 파일: `backend/evals/baselines/v3_route.json`. 분류기는 API 없이 재현되는 `HeuristicIntentClassifier`다.
 - 추출 정확도 전체 실험은 로컬에서 `python -m evals.v3.run_experiment`로 돌린다. OpenAI와 LangSmith 키가 필요하다.
 
@@ -43,5 +52,3 @@
 ```powershell
 git config core.hooksPath .githooks
 ```
-
-연습: PR을 한 번 열어 본다.
