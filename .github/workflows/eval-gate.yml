@@ -2,16 +2,8 @@ name: eval-gate
 
 on:
   pull_request:
-    paths:
-      - "backend/app/**"
-      - "backend/evals/**"
-      - ".github/workflows/eval-gate.yml"
   push:
     branches: [main]
-    paths:
-      - "backend/app/**"
-      - "backend/evals/**"
-      - ".github/workflows/eval-gate.yml"
 
 jobs:
   route-gate:
