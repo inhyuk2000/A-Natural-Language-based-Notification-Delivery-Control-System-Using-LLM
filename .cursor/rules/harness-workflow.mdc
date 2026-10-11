@@ -5,12 +5,31 @@ alwaysApply: true
 
 # Harness workflow
 
-- Change code only for the current issue. Do not push to `main`.
+- When the user asks to change code, run these from the repo root before editing files. Skip them for questions. If the current branch is already the task branch, do not create another one.
+
+```powershell
+git checkout main
+git pull origin main
+git checkout -b 작업이름
+```
+
+- Name the branch from the task, for example `eval/reject-unsafe`.
+- Do not commit or push to `main`. Do not run `git push` unless the user asks.
+- When the code change is finished, tell the user the exact branch name and these commands with that name filled in:
+
+```powershell
+git add .
+git commit -m "무엇을 왜 바꿨는지"
+git push -u origin 작업이름
+```
+
+- Then tell them to open the GitHub link from the push output and click Create pull request. Merge only after pytest, secret-scan, and route-correctness are green.
+- Change code only for the current issue.
 - Do not edit `.env` or `.env.*`. Add new variables to `backend/.env.example` only.
 - Do not put API keys or tokens in source.
 - Do not edit Golden Set expected outputs to raise a score.
 - Keep Android `app/` and `backend/` changes in separate tasks.
-- After backend changes, run `pytest tests` from `backend/`.
+- After backend changes, run `python -m pytest tests` from `backend/`.
 - If `backend/app/v1/prompt_engine.py`, `backend/app/v2/prompt_engine.py`, `backend/app/v3/prompt_engine.py`, or `backend/evals/**` changed, also run `python -m evals.gate` from `backend/`.
 - PR body must include the requirement, the change, pytest result, and eval result.
 - Commit messages must say what changed and why.
