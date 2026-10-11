@@ -1,0 +1,38 @@
+#!/bin/sh
+# Enable once with: git config core.hooksPath .githooks
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd) || exit 1
+cd "$root" || exit 1
+
+if [ -f "$root/backend/.venv/Scripts/python.exe" ]; then
+  PY="$root/backend/.venv/Scripts/python.exe"
+elif [ -f "$root/backend/.venv/bin/python" ]; then
+  PY="$root/backend/.venv/bin/python"
+else
+  PY=python
+fi
+
+"$PY" backend/scripts/secret_scan.py --staged || exit 1
+
+changed=$(git diff --cached --name-only)
+need_test=0
+need_gate=0
+for f in $changed; do
+  case "$f" in
+    backend/app/*|backend/tests/*|backend/scripts/*)
+      need_test=1
+      ;;
+  esac
+  case "$f" in
+    backend/app/v1/prompt_engine.py|backend/app/v2/prompt_engine.py|backend/app/v3/prompt_engine.py|backend/evals/*)
+      need_test=1
+      need_gate=1
+      ;;
+  esac
+done
+
+if [ "$need_test" = 1 ]; then
+  (cd backend && "$PY" -m pytest tests -q) || exit 1
+fi
+if [ "$need_gate" = 1 ]; then
+  (cd backend && "$PY" -m evals.gate) || exit 1
+fi

@@ -1,0 +1,16 @@
+---
+description: Issue, branch, PR, and verification gates for agent changes
+alwaysApply: true
+---
+
+# Harness workflow
+
+- Change code only for the current issue. Do not push to `main`.
+- Do not edit `.env` or `.env.*`. Add new variables to `backend/.env.example` only.
+- Do not put API keys or tokens in source.
+- Do not edit Golden Set expected outputs to raise a score.
+- Keep Android `app/` and `backend/` changes in separate tasks.
+- After backend changes, run `pytest tests` from `backend/`.
+- If `backend/app/v1/prompt_engine.py`, `backend/app/v2/prompt_engine.py`, `backend/app/v3/prompt_engine.py`, or `backend/evals/**` changed, also run `python -m evals.gate` from `backend/`.
+- PR body must include the requirement, the change, pytest result, and eval result.
+- Commit messages must say what changed and why.

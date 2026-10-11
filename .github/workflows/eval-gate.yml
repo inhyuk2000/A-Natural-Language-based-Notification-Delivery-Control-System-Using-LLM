@@ -1,0 +1,32 @@
+name: eval-gate
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/**"
+      - "backend/evals/**"
+      - ".github/workflows/eval-gate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/app/**"
+      - "backend/evals/**"
+      - ".github/workflows/eval-gate.yml"
+
+jobs:
+  route-gate:
+    name: route-correctness
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install gate dependency
+        run: pip install langsmith
+      - name: Route regression gate
+        run: python -m evals.gate
