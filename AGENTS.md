@@ -43,3 +43,5 @@
 ```powershell
 git config core.hooksPath .githooks
 ```
+
+연습: PR을 한 번 열어 본다.
