@@ -29,9 +29,17 @@ git checkout -b 작업이름
    - `backend/app/v2/prompt_engine.py`
    - `backend/app/v3/prompt_engine.py`
    - `backend/evals/**`
-5. 테스트가 통과하면 그 브랜치를 푸시하고 PR을 연다. 본문에는 요구사항, 변경 내용, 테스트 결과, eval 결과를 적는다.
+5. 수정이 끝나면 사용자에게 브랜치 이름을 알리고, 아래 명령을 그 이름으로 적어서 보여 준다. 사용자가 직접 푸시한다. 에이전트는 사용자가 시키기 전에는 `git push`를 실행하지 않는다.
 
-`main`에는 커밋하거나 푸시하지 않는다. 커밋 메시지에는 무엇을 바꿨는지와 왜 바꿨는지를 같이 쓴다.
+```powershell
+git add .
+git commit -m "무엇을 왜 바꿨는지"
+git push -u origin 작업이름
+```
+
+6. 푸시 출력에 나온 주소를 열어 Create pull request를 누르라고 안내한다. pytest, secret-scan, route-correctness가 초록일 때만 머지한다.
+
+`main`에는 커밋하거나 푸시하지 않는다. `git push origin main`은 쓰지 않는다. 커밋 메시지에는 무엇을 바꿨는지와 왜 바꿨는지를 같이 쓴다.
 
 ## 금지
 
